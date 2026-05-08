@@ -4,7 +4,7 @@ from datetime import datetime
 import io
 
 # Configuración visual
-st.set_page_config(page_title="Auditoría Claro Full", page_icon="🔴")
+st.set_page_config(page_title="Comisiones Distri-Lisu", page_icon="🔴")
 
 st.markdown("""
     <style>
@@ -23,7 +23,7 @@ with st.expander("📊 INDICADORES CORE", expanded=True):
     col1, col2 = st.columns(2)
     icb = col1.number_input("% Alcance ICB", min_value=0.0, value=0.0, step=0.1)
     comp = col2.number_input("% Alcance Completos", min_value=0.0, value=0.0, step=0.1)
-    psr = st.number_input("Cantidad PSR", min_value=0, value=0)
+    psr = st.number_input("Cantidad PSR/ICB", min_value=0, value=0)
     exc_icb = col1.number_input("Excedentes ICB", min_value=0, value=0)
     exc_comp = col2.number_input("Excedentes Comp.", min_value=0, value=0)
 
