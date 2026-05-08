@@ -14,7 +14,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🔴 Auditoría Distri-Lisu")
-st.write("Versión 2026.5 - Inputs en % con cálculo de excedentes")
+st.write("Versión 2026.6 - Fix de Reporte")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
@@ -24,18 +24,16 @@ with st.expander("📊 INDICADORES CORE", expanded=True):
     with c1:
         st.subheader("ICB")
         icb_pct = st.number_input("% Alcance ICB", min_value=0.0, value=0.0, step=0.1)
-        obj_icb_u = st.number_input("Objetivo ICB (Unidades)", min_value=1, value=100, key="obj_icb")
+        obj_icb_u = st.number_input("Objetivo ICB (Unidades)", min_value=1, value=100)
         
-        # Cálculo: Si el % es 115, el excedente es sobre el 5% (115-110) del objetivo
         exc_icb = max(0, int(((icb_pct - 110) / 100) * obj_icb_u)) if icb_pct > 110 else 0
         st.caption(f"Excedentes detectados: {exc_icb}")
 
     with c2:
         st.subheader("Completos")
         comp_pct = st.number_input("% Alcance Completos", min_value=0.0, value=0.0, step=0.1)
-        obj_comp_u = st.number_input("Objetivo Comp. (Unidades)", min_value=1, value=100, key="obj_comp")
+        obj_comp_u = st.number_input("Objetivo Comp. (Unidades)", min_value=1, value=100)
         
-        # Cálculo: Excedentes sobre el 110%
         exc_comp = max(0, int(((comp_pct - 110) / 100) * obj_comp_u)) if comp_pct > 110 else 0
         st.caption(f"Excedentes detectados: {exc_comp}")
     
@@ -60,7 +58,6 @@ with st.expander("🏆 BONOS"):
 
 # --- LÓGICA DE AUDITORÍA ---
 def calcular_todo():
-    # 1. Escalas Core (Usando el % ingresado)
     def escala(pct):
         if pct >= 110: return 97749
         elif pct >= 105: return 83376
@@ -73,29 +70,23 @@ def calcular_todo():
     p_comp = escala(comp_pct)
     p_psr = 140760 if psr >= 144 else 115920 if psr >= 132 else 92000 if psr >= 125 else 59800 if psr >= 108 else 0
     
-    # Montos de excedentes calculados arriba
     m_exc_icb = exc_icb * 191
     m_exc_comp = exc_comp * 423
-    
     base_core = p_icb + p_comp + p_psr + m_exc_icb + m_exc_comp
 
-    # 2. Modificadores CP
     mod_si = 0.2 if si_pct>=80 else 0.1 if si_pct>=75 else 0.0 if si_pct>=70 else -0.25 if si_pct>=60 else -0.5
     mod_ca = 0.2 if ca_q>=44 else 0.1 if ca_q>=38 else 0.0 if ca_q>=31 else -0.25 if ca_q>=24 else -0.5
     impacto_cp = base_core * (mod_si + mod_ca)
 
-    # 3. Fijas
     fijas_total = (portas*5000) + (lineas*2500) + (baf*8000) + (cp5k*2500)
-
-    # 4. Productividad
-    subtotal = base_core + impacto_cp + fijas_total
+    
+    subtotal_pre_prod = base_core + impacto_cp + fijas_total
     v_fijas_q = portas + lineas + baf
     mod_p = 0.15 if v_fijas_q >= 10 else 0.0 if v_fijas_q >= 5 else -0.15
-    impacto_prod = subtotal * mod_p
+    impacto_prod = subtotal_pre_prod * mod_p
 
-    # 5. Final
     bonos = (9545 if l_icb else 0) + (9545 if l_comp else 0)
-    total_final = max(0, subtotal + impacto_prod + bonos)
+    total_final = max(0, subtotal_pre_prod + impacto_prod + bonos)
 
     return locals()
 
@@ -105,7 +96,7 @@ if st.button("🚀 GENERAR AUDITORÍA COMPLETA"):
     st.divider()
     st.metric("TOTAL A LIQUIDAR", f"${d['total_final']:,.2f}")
 
-    # EXCEL DETALLADO
+    # --- GENERACIÓN DE EXCEL ---
     output = io.BytesIO()
     
     resumen = [
@@ -122,12 +113,12 @@ if st.button("🚀 GENERAR AUDITORÍA COMPLETA"):
     
     detalle = [
         ["Concepto", "Dato de Entrada", "Cálculo Realizado", "Subtotal"],
-        ["ICB", f"{icb_pct}% (Alcance)", f"Escala: ${d['p_icb']} + Excedentes: {exc_icb}", d['p_icb'] + d['m_exc_icb']],
-        ["Completos", f"{comp_pct}% (Alcance)", f"Escala: ${d['p_comp']} + Excedentes: {exc_comp}", d['p_comp'] + d['m_exc_comp']],
-        ["PSR", f"{psr} Unidades", "Monto fijo por escala", d['p_psr']],
-        ["Claro Pay", f"SI: {si_pct}% | Act: {ca_q}", f"Modificador: {(d['mod_si']+d['mod_ca'])*100}%", d['impacto_cp']],
-        ["Ventas Fijas", f"{v_fijas_q} ventas", "Suma de comisiones individuales", d['fijas_total']],
-        ["Productividad", f"Rango: {v_fijas_q}", f"Modificador: {d['mod_p']*100}% sobre subtotal", d['impacto_prod']]
+        ["ICB", f"{icb_pct}%", f"Escala: ${d['p_icb']} + Exc: {exc_icb}", d['p_icb'] + d['m_exc_icb']],
+        ["Completos", f"{comp_pct}%", f"Escala: ${d['p_comp']} + Exc: {exc_comp}", d['p_comp'] + d['m_exc_comp']],
+        ["PSR", f"{psr} U", "Monto fijo escala", d['p_psr']],
+        ["Claro Pay", f"SI: {si_pct}%", f"Mod: {(d['mod_si']+d['mod_ca'])*100}%", d['impacto_cp']],
+        ["Ventas Fijas", f"{d['v_fijas_q']} ventas", "Comisiones fijas", d['fijas_total']],
+        ["Productividad", f"Mod aplicado", f"{d['mod_p']*100}%", d['impacto_prod']]
     ]
 
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
