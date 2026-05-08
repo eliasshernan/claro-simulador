@@ -40,13 +40,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🔴 Auditoría Distri-Lisu")
+st.title("🔴 Comisiones Distri-Lisu")
 st.write(f"Versión 2026.7 - {datetime.now().strftime('%d/%m/%Y')}")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
 # --- ENTRADA DE DATOS ---
-with st.expander("📊 INDICADORES CORE", expanded=True):
+with st.expander("📊 INDICADORES BÁSICOS", expanded=True):
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("ICB")
@@ -72,7 +72,7 @@ with st.expander("📱 CLARO PAY"):
     si_pct = c3.number_input("% Sell In CP", min_value=0.0, value=75.0)
     ca_q = c4.number_input("Activaciones CP (Cant. Real)", min_value=0, value=0)
 
-with st.expander("🏠 PRODUCTOS FIJOS"):
+with st.expander("🏠 REFERIDOS"):
     c5, c6 = st.columns(2)
     portas = c5.number_input("Portabilidades ($5k)", min_value=0, value=0)
     lineas = c6.number_input("Líneas Nuevas ($2.5k)", min_value=0, value=0)
@@ -127,7 +127,7 @@ def calcular_todo():
     return locals() # Captura todas las variables calculadas
 
 # --- BOTÓN DE ACCIÓN ---
-if st.button("🚀 GENERAR AUDITORÍA COMPLETA"):
+if st.button("🚀 GENERAR CÁLCULO"):
     if not vendedor:
         st.warning("⚠️ Por favor, ingresa el nombre del vendedor.")
     else:
@@ -171,7 +171,7 @@ if st.button("🚀 GENERAR AUDITORÍA COMPLETA"):
             pd.DataFrame(detalle).to_excel(writer, sheet_name='Detalle_Calculos', index=False)
 
         st.download_button(
-            label="📥 Descargar Reporte Full para Auditoría",
+            label="📥 Descargar Reporte Full",
             data=output.getvalue(),
             file_name=f"Auditoria_{vendedor}_{datetime.now().strftime('%d_%m')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
