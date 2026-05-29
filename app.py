@@ -41,7 +41,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🔴 Comisiones Distri-Lisu")
-st.write(f"Versión 2026.8 (Actualizada) - {datetime.now().strftime('%d/%m/%Y')}")
+st.write(f"Versión 2026.8 (Detallada) - {datetime.now().strftime('%d/%m/%Y')}")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
@@ -85,7 +85,7 @@ with st.expander("🏆 BONOS RANKING"):
 
 # --- LÓGICA DE AUDITORÍA ---
 def calcular_todo():
-    # 1. Escalas Core según la foto
+    # 1. Escalas Core
     def escala(pct):
         if pct >= 110: return 127499
         elif pct >= 105: return 108752
@@ -97,10 +97,10 @@ def calcular_todo():
     p_icb = escala(icb_pct)
     p_comp = escala(comp_pct)
     
-    # Pago PSR según nueva tabla
+    # Pago PSR
     p_psr = 183600 if psr >= 144 else 151200 if psr >= 132 else 120000 if psr >= 125 else 78000 if psr >= 108 else 0
     
-    # NUEVOS valores de excedentes por unidad
+    # Excedentes
     m_exc_icb = exc_icb * 248
     m_exc_comp = exc_comp * 550
     
@@ -111,31 +111,33 @@ def calcular_todo():
     mod_ca = 0.2 if ca_q>=44 else 0.1 if ca_q>=38 else 0.0 if ca_q>=31 else -0.25 if ca_q>=24 else -0.5
     impacto_cp = base_core * (mod_si + mod_ca)
 
-    # 3. Ventas Fijas (Lógica de productividad de referidos)
+    # 3. Ventas Fijas (Lógica de precios según volumen de referidos)
     v_fijas_q = portas + lineas + baf
     
     if v_fijas_q >= 10:
-        # Paga tarifa premium sin porcentaje de descuento
         val_porta = 6500
         val_linea = 4000
         val_baf = 10000
         mod_p_label = "Premio Premium (>=10 ventas)"
     elif v_fijas_q >= 3:
-        # Paga tarifa base normal sin penalización
         val_porta = 5000
         val_linea = 2500
         val_baf = 8000
         mod_p_label = "Rango Neutro (3-9 ventas)"
     else:
-        # Menos de 3 ventas: Paga tarifa base pero aplica descuento
         val_porta = 5000
         val_linea = 2500
         val_baf = 8000
         mod_p_label = "Penalización -15% (<3 ventas)"
         
-    fijas_total = (portas * val_porta) + (lineas * val_linea) + (baf * val_baf) + (cp5k * 3500)
+    tot_portas = portas * val_porta
+    tot_lineas = lineas * val_linea
+    tot_baf = baf * val_baf
+    tot_cp5k = cp5k * 3500
     
-    # 4. Cálculo final del Ajuste por baja productividad
+    fijas_total = tot_portas + tot_lineas + tot_baf + tot_cp5k
+    
+    # 4. Ajuste por baja productividad
     subtotal_pre_prod = base_core + impacto_cp + fijas_total
     
     if v_fijas_q < 3:
@@ -143,7 +145,7 @@ def calcular_todo():
     else:
         impacto_prod = 0.0
 
-    # 5. Bonos Finales Nuevos
+    # 5. Bonos Finales
     bonos = (12409 if l_icb else 0) + (12409 if l_comp else 0)
     total_final = max(0, subtotal_pre_prod + impacto_prod + bonos)
 
@@ -158,6 +160,59 @@ if st.button("🚀 GENERAR CÁLCULO"):
         
         st.divider()
         st.metric("TOTAL A LIQUIDAR", f"${d['total_final']:,.2f}")
+
+        # --- NUEVA SECCIÓN: DESGLOSE VISUAL EN LA PANTALLA ---
+        st.subheader("🔍 DESGLOSE DETALLADO DEL CÁLCULO")
+        
+        with st.expander("📋 Ver detalle línea por línea", expanded=True):
+            st.markdown(f"**👤 Vendedor:** {vendedor}")
+            st.markdown("---")
+            
+            # Detalle de Core
+            st.markdown("**📊 Indicadores Core & PSR:**")
+            st.write(f"* **Escala ICB ({icb_pct}%):** ${d['p_icb']:,}")
+            if exc_icb > 0:
+                st.write(f"    * *Excedentes ICB:* {exc_icb} u. × $248 = ${d['m_exc_icb']:,}")
+            st.write(f"* **Escala Completos ({comp_pct}%):** ${d['p_comp']:,}")
+            if exc_comp > 0:
+                st.write(f"    * *Excedentes Completos:* {exc_comp} u. × $550 = ${d['m_exc_comp']:,}")
+            st.write(f"* **Escala PSR ({psr} u.):** ${d['p_psr']:,}")
+            st.write(f"👉 **Subtotal Base Core:** ${d['base_core']:,}")
+            
+            st.markdown("---")
+            
+            # Detalle Claro Pay
+            st.markdown("**📱 Claro Pay Modificadores:**")
+            total_mod_cp = (d['mod_si'] + d['mod_ca']) * 100
+            st.write(f"* *Sell In ({si_pct}%):* {d['mod_si']*100}% | *Activaciones ({ca_q} u.):* {d['mod_ca']*100}%")
+            st.write(f"👉 **Impacto Claro Pay ({total_mod_cp}% sobre Core):** ${d['impacto_cp']:,}")
+            
+            st.markdown("---")
+            
+            # Detalle Referidos (LO QUE PEDISTE)
+            st.markdown(f"**🏠 Referidos y Ventas Fijas ({d['mod_p_label']}):**")
+            st.write(f"* **Portabilidades:** {portas} u. × ${d['val_porta']:,} = **${d['tot_portas']:,}**")
+            st.write(f"* **Líneas Nuevas:** {lineas} u. × ${d['val_linea']:,} = **${d['tot_lineas']:,}**")
+            st.write(f"* **BAF Internet:** {baf} u. × ${d['val_baf']:,} = **${d['tot_baf']:,}**")
+            st.write(f"* **Claro Pay >$5500:** {cp5k} u. × $3,500 = **${d['tot_cp5k']:,}**")
+            st.write(f"👉 **Total Referidos:** ${d['fijas_total']:,}")
+            
+            if d['impacto_prod'] < 0:
+                st.markdown(f"⚠️ **Descuento por baja productividad (<3 ventas):** ${d['impacto_prod']:,}")
+                
+            st.markdown("---")
+            
+            # Detalle Bonos
+            if d['bonos'] > 0:
+                st.markdown("**🏆 Bonos de Ranking:**")
+                if l_icb: st.write("* Líder ICB: $12,409")
+                if l_comp: st.write("* Líder Completos: $12,409")
+                st.write(f"👉 **Total Bonos:** ${d['bonos']:,}")
+                st.markdown("---")
+                
+            st.markdown(f"### **💰 NETO TOTAL ACUMULADO: ${d['total_final']:,.2f}**")
+
+        st.divider()
 
         # --- GENERACIÓN DE EXCEL CON PANDAS ---
         output = io.BytesIO()
@@ -198,5 +253,3 @@ if st.button("🚀 GENERAR CÁLCULO"):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
-        
-        st.success(f"Auditoría generada con éxito bajo la nueva regla: {d['mod_p_label']}.")
