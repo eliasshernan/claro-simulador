@@ -41,7 +41,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🔴 Comisiones Distri-Lisu")
-st.write(f"Versión 2026.7 - {datetime.now().strftime('%d/%m/%Y')}")
+st.write(f"Versión 2026.8 (Actualizada) - {datetime.now().strftime('%d/%m/%Y')}")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
@@ -74,35 +74,35 @@ with st.expander("📱 CLARO PAY"):
 
 with st.expander("🏠 REFERIDOS"):
     c5, c6 = st.columns(2)
-    portas = c5.number_input("Portabilidades ($5k)", min_value=0, value=0)
-    lineas = c6.number_input("Líneas Nuevas ($2.5k)", min_value=0, value=0)
-    baf = c5.number_input("BAF Internet ($8k)", min_value=0, value=0)
-    cp5k = c6.number_input("CP >$5k ($2.5k)", min_value=0, value=0)
+    portas = c5.number_input("Portabilidades", min_value=0, value=0)
+    lineas = c6.number_input("Líneas Nuevas", min_value=0, value=0)
+    baf = c5.number_input("BAF Internet", min_value=0, value=0)
+    cp5k = c6.number_input("CP 1° Compra >$5500", min_value=0, value=0)
 
 with st.expander("🏆 BONOS RANKING"):
-    l_icb = st.checkbox("Líder ICB ($9545)")
-    l_comp = st.checkbox("Líder Completos ($9545)")
+    l_icb = st.checkbox("Líder ICB ($12409)")
+    l_comp = st.checkbox("Líder Completos ($12409)")
 
 # --- LÓGICA DE AUDITORÍA ---
 def calcular_todo():
-    # 1. Escalas Core según %
+    # 1. Escalas Core según la foto
     def escala(pct):
-        if pct >= 110: return 97749
-        elif pct >= 105: return 83376
-        elif pct >= 100: return 69000
-        elif pct >= 90: return 44850
-        elif pct >= 80: return 27600
+        if pct >= 110: return 127499
+        elif pct >= 105: return 108752
+        elif pct >= 100: return 90000
+        elif pct >= 90: return 58500
+        elif pct >= 80: return 36000
         return 0
 
     p_icb = escala(icb_pct)
     p_comp = escala(comp_pct)
     
-    # Pago PSR según tabla
-    p_psr = 140760 if psr >= 144 else 115920 if psr >= 132 else 92000 if psr >= 125 else 59800 if psr >= 108 else 0
+    # Pago PSR según nueva tabla
+    p_psr = 183600 if psr >= 144 else 151200 if psr >= 132 else 120000 if psr >= 125 else 78000 if psr >= 108 else 0
     
-    # Montos de excedentes
-    m_exc_icb = exc_icb * 191
-    m_exc_comp = exc_comp * 423
+    # NUEVOS valores de excedentes por unidad
+    m_exc_icb = exc_icb * 248
+    m_exc_comp = exc_comp * 550
     
     base_core = p_icb + p_comp + p_psr + m_exc_icb + m_exc_comp
 
@@ -111,20 +111,43 @@ def calcular_todo():
     mod_ca = 0.2 if ca_q>=44 else 0.1 if ca_q>=38 else 0.0 if ca_q>=31 else -0.25 if ca_q>=24 else -0.5
     impacto_cp = base_core * (mod_si + mod_ca)
 
-    # 3. Ventas Fijas
-    fijas_total = (portas*5000) + (lineas*2500) + (baf*8000) + (cp5k*2500)
-    
-    # 4. Ajuste de Productividad
-    subtotal_pre_prod = base_core + impacto_cp + fijas_total
+    # 3. Ventas Fijas (Lógica de productividad de referidos)
     v_fijas_q = portas + lineas + baf
-    mod_p = 0.15 if v_fijas_q >= 10 else 0.0 if v_fijas_q >= 5 else -0.15
-    impacto_prod = subtotal_pre_prod * mod_p
+    
+    if v_fijas_q >= 10:
+        # Paga tarifa premium sin porcentaje de descuento
+        val_porta = 6500
+        val_linea = 4000
+        val_baf = 10000
+        mod_p_label = "Premio Premium (>=10 ventas)"
+    elif v_fijas_q >= 3:
+        # Paga tarifa base normal sin penalización
+        val_porta = 5000
+        val_linea = 2500
+        val_baf = 8000
+        mod_p_label = "Rango Neutro (3-9 ventas)"
+    else:
+        # Menos de 3 ventas: Paga tarifa base pero aplica descuento
+        val_porta = 5000
+        val_linea = 2500
+        val_baf = 8000
+        mod_p_label = "Penalización -15% (<3 ventas)"
+        
+    fijas_total = (portas * val_porta) + (lineas * val_linea) + (baf * val_baf) + (cp5k * 3500)
+    
+    # 4. Cálculo final del Ajuste por baja productividad
+    subtotal_pre_prod = base_core + impacto_cp + fijas_total
+    
+    if v_fijas_q < 3:
+        impacto_prod = subtotal_pre_prod * -0.15
+    else:
+        impacto_prod = 0.0
 
-    # 5. Bonos Finales
-    bonos = (9545 if l_icb else 0) + (9545 if l_comp else 0)
+    # 5. Bonos Finales Nuevos
+    bonos = (12409 if l_icb else 0) + (12409 if l_comp else 0)
     total_final = max(0, subtotal_pre_prod + impacto_prod + bonos)
 
-    return locals() # Captura todas las variables calculadas
+    return locals()
 
 # --- BOTÓN DE ACCIÓN ---
 if st.button("🚀 GENERAR CÁLCULO"):
@@ -139,7 +162,6 @@ if st.button("🚀 GENERAR CÁLCULO"):
         # --- GENERACIÓN DE EXCEL CON PANDAS ---
         output = io.BytesIO()
         
-        # Hoja 1: Resumen Ejecutivo
         resumen = [
             ["CONCEPTO", "VALOR"],
             ["Vendedor", vendedor],
@@ -147,23 +169,22 @@ if st.button("🚀 GENERAR CÁLCULO"):
             ["---", "---"],
             ["BASE CORE (Escalas + Exc)", d['base_core']],
             ["IMPACTO CLARO PAY", d['impacto_cp']],
-            ["TOTAL VENTAS FIJAS", d['fijas_total']],
-            ["AJUSTE PRODUCTIVIDAD", d['impacto_prod']],
-            ["BONOS RANKING", d['bonos']],
+            ["TOTAL REFERIDOS (CON PRODUCTIVIDAD)", d['fijas_total']],
+            ["DESCUENTO PRODUCTIVIDAD (<3 vtas)", d['impacto_prod']],
+            ["BONOS RANKING LÍDER", d['bonos']],
             ["TOTAL NETO FINAL", d['total_final']]
         ]
         
-        # Hoja 2: Detalle de la Auditoría
         detalle = [
             ["Concepto", "Dato de Entrada", "Detalle de Cálculo", "Monto"],
             ["Incentivo ICB", f"{icb_pct}%", f"Escala alcanzada: ${d['p_icb']}", d['p_icb']],
-            ["Excedentes ICB", f"Obj: {obj_icb_u}", f"{exc_icb} unidades x $191", d['m_exc_icb']],
+            ["Excedentes ICB", f"Obj: {obj_icb_u}", f"{exc_icb} unidades x $248", d['m_exc_icb']],
             ["Incentivo Comp.", f"{comp_pct}%", f"Escala alcanzada: ${d['p_comp']}", d['p_comp']],
-            ["Excedentes Comp.", f"Obj: {obj_comp_u}", f"{exc_comp} unidades x $423", d['m_exc_comp']],
+            ["Excedentes Comp.", f"Obj: {obj_comp_u}", f"{exc_comp} unidades x $550", d['m_exc_comp']],
             ["Bono PSR", f"{psr} Unidades", "Monto según escala PSR", d['p_psr']],
             ["Modificador CP", f"SI: {si_pct}% / Act: {ca_q}", f"{(d['mod_si']+d['mod_ca'])*100}% sobre Base Core", d['impacto_cp']],
-            ["Ventas Fijas", f"{d['v_fijas_q']} ventas", "Comisiones Portas/Líneas/BAF", d['fijas_total']],
-            ["Productividad", f"Rango: {d['v_fijas_q']}", f"{d['mod_p']*100}% sobre Subtotal", d['impacto_prod']]
+            ["Referidos Totales", f"{d['v_fijas_q']} ventas", f"Estado: {d['mod_p_label']}", d['fijas_total']],
+            ["Ajuste Castigo", f"< 3 ventas", "Aplica -15% sobre subtotal si corresponde", d['impacto_prod']]
         ]
 
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -178,4 +199,4 @@ if st.button("🚀 GENERAR CÁLCULO"):
             use_container_width=True
         )
         
-        st.success("Auditoría generada con éxito. Los excedentes se calcularon automáticamente sobre el 110%.")
+        st.success(f"Auditoría generada con éxito bajo la nueva regla: {d['mod_p_label']}.")
