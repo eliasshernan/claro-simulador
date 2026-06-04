@@ -41,7 +41,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.title("🔴 Comisiones Distri-Lisu")
-st.write(f"Versión 2026.8 (Detallada) - {datetime.now().strftime('%d/%m/%Y')}")
+st.write(f"Versión 2026.8 (Auto-% Unidades) - {datetime.now().strftime('%d/%m/%Y')}")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
@@ -50,16 +50,26 @@ with st.expander("📊 INDICADORES BÁSICOS", expanded=True):
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("ICB")
-        icb_pct = st.number_input("% Alcance ICB", min_value=0.0, value=0.0, step=0.1)
         obj_icb_u = st.number_input("Objetivo ICB (Unidades)", min_value=1, value=100)
+        u_real_icb = st.number_input("Unidades Reales ICB", min_value=0, value=0)
+        
+        # El programa calcula automáticamente el % de alcance
+        icb_pct = (u_real_icb / obj_icb_u) * 100 if obj_icb_u > 0 else 0.0
+        st.caption(f"Alcance calculado: {icb_pct:.1f}%")
+        
         # Cálculo: Excedentes si supera el 110%
         exc_icb = max(0, int(((icb_pct - 110) / 100) * obj_icb_u)) if icb_pct > 110 else 0
         st.caption(f"Excedentes detectados: {exc_icb}")
 
     with c2:
         st.subheader("Completos")
-        comp_pct = st.number_input("% Alcance Completos", min_value=0.0, value=0.0, step=0.1)
         obj_comp_u = st.number_input("Objetivo Comp. (Unidades)", min_value=1, value=100)
+        u_real_comp = st.number_input("Unidades Reales Completos", min_value=0, value=0)
+        
+        # El programa calcula automáticamente el % de alcance
+        comp_pct = (u_real_comp / obj_comp_u) * 100 if obj_comp_u > 0 else 0.0
+        st.caption(f"Alcance calculado: {comp_pct:.1f}%")
+        
         # Cálculo: Excedentes si supera el 110%
         exc_comp = max(0, int(((comp_pct - 110) / 100) * obj_comp_u)) if comp_pct > 110 else 0
         st.caption(f"Excedentes detectados: {exc_comp}")
@@ -161,7 +171,7 @@ if st.button("🚀 GENERAR CÁLCULO"):
         st.divider()
         st.metric("TOTAL A LIQUIDAR", f"${d['total_final']:,.2f}")
 
-        # --- NUEVA SECCIÓN: DESGLOSE VISUAL EN LA PANTALLA ---
+        # --- SECCIÓN: DESGLOSE VISUAL EN LA PANTALLA ---
         st.subheader("🔍 DESGLOSE DETALLADO DEL CÁLCULO")
         
         with st.expander("📋 Ver detalle línea por línea", expanded=True):
@@ -170,10 +180,10 @@ if st.button("🚀 GENERAR CÁLCULO"):
             
             # Detalle de Core
             st.markdown("**📊 Indicadores Core & PSR:**")
-            st.write(f"* **Escala ICB ({icb_pct}%):** ${d['p_icb']:,}")
+            st.write(f"* **Escala ICB ({u_real_icb} u. de {obj_icb_u} u. = {icb_pct:.1f}%):** ${d['p_icb']:,}")
             if exc_icb > 0:
                 st.write(f"    * *Excedentes ICB:* {exc_icb} u. × $248 = ${d['m_exc_icb']:,}")
-            st.write(f"* **Escala Completos ({comp_pct}%):** ${d['p_comp']:,}")
+            st.write(f"* **Escala Completos ({u_real_comp} u. de {obj_comp_u} u. = {comp_pct:.1f}%):** ${d['p_comp']:,}")
             if exc_comp > 0:
                 st.write(f"    * *Excedentes Completos:* {exc_comp} u. × $550 = ${d['m_exc_comp']:,}")
             st.write(f"* **Escala PSR ({psr} u.):** ${d['p_psr']:,}")
@@ -189,7 +199,7 @@ if st.button("🚀 GENERAR CÁLCULO"):
             
             st.markdown("---")
             
-            # Detalle Referidos (LO QUE PEDISTE)
+            # Detalle Referidos
             st.markdown(f"**🏠 Referidos y Ventas Fijas ({d['mod_p_label']}):**")
             st.write(f"* **Portabilidades:** {portas} u. × ${d['val_porta']:,} = **${d['tot_portas']:,}**")
             st.write(f"* **Líneas Nuevas:** {lineas} u. × ${d['val_linea']:,} = **${d['tot_lineas']:,}**")
@@ -232,9 +242,9 @@ if st.button("🚀 GENERAR CÁLCULO"):
         
         detalle = [
             ["Concepto", "Dato de Entrada", "Detalle de Cálculo", "Monto"],
-            ["Incentivo ICB", f"{icb_pct}%", f"Escala alcanzada: ${d['p_icb']}", d['p_icb']],
+            ["Incentivo ICB", f"{u_real_icb} de {obj_icb_u} ({icb_pct:.1f}%)", f"Escala alcanzada: ${d['p_icb']}", d['p_icb']],
             ["Excedentes ICB", f"Obj: {obj_icb_u}", f"{exc_icb} unidades x $248", d['m_exc_icb']],
-            ["Incentivo Comp.", f"{comp_pct}%", f"Escala alcanzada: ${d['p_comp']}", d['p_comp']],
+            ["Incentivo Comp.", f"{u_real_comp} de {obj_comp_u} ({comp_pct:.1f}%)", f"Escala alcanzada: ${d['p_comp']}", d['p_comp']],
             ["Excedentes Comp.", f"Obj: {obj_comp_u}", f"{exc_comp} unidades x $550", d['m_exc_comp']],
             ["Bono PSR", f"{psr} Unidades", "Monto según escala PSR", d['p_psr']],
             ["Modificador CP", f"SI: {si_pct}% / Act: {ca_q}", f"{(d['mod_si']+d['mod_ca'])*100}% sobre Base Core", d['impacto_cp']],
