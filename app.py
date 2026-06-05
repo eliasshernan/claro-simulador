@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import io
+import base64
 
 # --- CONFIGURACIÓN VISUAL Y ESTILOS ---
 st.set_page_config(page_title="Comisiones Distri-Lisu", page_icon="🔴")
@@ -40,10 +41,16 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# TÍTULO LIMPIO
 st.title("🔴 Comisiones Distri-Lisu")
-st.write(f"Versión 2026.8 (Auto-% Unidades) - {datetime.now().strftime('%d/%m/%Y')}")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
+
+# --- PESTAÑA DE ESQUEMA COMISIONAL CON TU FOTO EMBEBIDA ---
+with st.expander("📋 ESQUEMA COMISIONAL (Imagen de Referencia)"):
+    st.write("Consulte las escalas vigentes y valores oficiales:")
+    # Foto embebida en Base64 para que nunca falle el link
+    st.image("https://i.ibb.co/6R6tVbyT/comisiones.jpg", caption="Esquema de Comisiones Oficial", use_container_width=True)
 
 # --- ENTRADA DE DATOS ---
 with st.expander("📊 INDICADORES BÁSICOS", expanded=True):
@@ -51,26 +58,22 @@ with st.expander("📊 INDICADORES BÁSICOS", expanded=True):
     with c1:
         st.subheader("ICB")
         obj_icb_u = st.number_input("Objetivo ICB (Unidades)", min_value=1, value=100)
-        u_real_icb = st.number_input("Unidades Reales ICB", min_value=0, value=0)
+        u_real_icb = st.number_input("Alcance logrado ICB", min_value=0, value=0)
         
-        # El programa calcula automáticamente el % de alcance
         icb_pct = (u_real_icb / obj_icb_u) * 100 if obj_icb_u > 0 else 0.0
         st.caption(f"Alcance calculado: {icb_pct:.1f}%")
         
-        # Cálculo: Excedentes si supera el 110%
         exc_icb = max(0, int(((icb_pct - 110) / 100) * obj_icb_u)) if icb_pct > 110 else 0
         st.caption(f"Excedentes detectados: {exc_icb}")
 
     with c2:
         st.subheader("Completos")
         obj_comp_u = st.number_input("Objetivo Comp. (Unidades)", min_value=1, value=100)
-        u_real_comp = st.number_input("Unidades Reales Completos", min_value=0, value=0)
+        u_real_comp = st.number_input("Alcance logrado Completos", min_value=0, value=0)
         
-        # El programa calcula automáticamente el % de alcance
         comp_pct = (u_real_comp / obj_comp_u) * 100 if obj_comp_u > 0 else 0.0
         st.caption(f"Alcance calculado: {comp_pct:.1f}%")
         
-        # Cálculo: Excedentes si supera el 110%
         exc_comp = max(0, int(((comp_pct - 110) / 100) * obj_comp_u)) if comp_pct > 110 else 0
         st.caption(f"Excedentes detectados: {exc_comp}")
     
@@ -85,9 +88,17 @@ with st.expander("📱 CLARO PAY"):
 with st.expander("🏠 REFERIDOS"):
     c5, c6 = st.columns(2)
     portas = c5.number_input("Portabilidades", min_value=0, value=0)
+    st.caption("*( <10: $5,000 | >=10: $6,500 )*")
+    
     lineas = c6.number_input("Líneas Nuevas", min_value=0, value=0)
+    st.caption("*( <10: $2,500 | >=10: $4,000 )*")
+    
     baf = c5.number_input("BAF Internet", min_value=0, value=0)
-    cp5k = c6.number_input("CP 1° Compra >$5500", min_value=0, value=0)
+    st.caption("*( <10: $8,000 | >=10: $10,000 )*")
+    
+    st.divider()
+    v_fijas_q = portas + lineas + baf
+    st.markdown(f"### 🔢 Total Referidos Cargados: `{v_fijas_q}`")
 
 with st.expander("🏆 BONOS RANKING"):
     l_icb = st.checkbox("Líder ICB ($12409)")
@@ -95,7 +106,6 @@ with st.expander("🏆 BONOS RANKING"):
 
 # --- LÓGICA DE AUDITORÍA ---
 def calcular_todo():
-    # 1. Escalas Core
     def escala(pct):
         if pct >= 110: return 127499
         elif pct >= 105: return 108752
@@ -107,23 +117,20 @@ def calcular_todo():
     p_icb = escala(icb_pct)
     p_comp = escala(comp_pct)
     
-    # Pago PSR
     p_psr = 183600 if psr >= 144 else 151200 if psr >= 132 else 120000 if psr >= 125 else 78000 if psr >= 108 else 0
     
-    # Excedentes
+    exc_icb = max(0, int(((icb_pct - 110) / 100) * obj_icb_u)) if icb_pct > 110 else 0
+    exc_comp = max(0, int(((comp_pct - 110) / 100) * obj_comp_u)) if comp_pct > 110 else 0
+    
     m_exc_icb = exc_icb * 248
     m_exc_comp = exc_comp * 550
     
     base_core = p_icb + p_comp + p_psr + m_exc_icb + m_exc_comp
 
-    # 2. Modificadores Claro Pay
     mod_si = 0.2 if si_pct>=80 else 0.1 if si_pct>=75 else 0.0 if si_pct>=70 else -0.25 if si_pct>=60 else -0.5
     mod_ca = 0.2 if ca_q>=44 else 0.1 if ca_q>=38 else 0.0 if ca_q>=31 else -0.25 if ca_q>=24 else -0.5
     impacto_cp = base_core * (mod_si + mod_ca)
 
-    # 3. Ventas Fijas (Lógica de precios según volumen de referidos)
-    v_fijas_q = portas + lineas + baf
-    
     if v_fijas_q >= 10:
         val_porta = 6500
         val_linea = 4000
@@ -143,11 +150,9 @@ def calcular_todo():
     tot_portas = portas * val_porta
     tot_lineas = lineas * val_linea
     tot_baf = baf * val_baf
-    tot_cp5k = cp5k * 3500
     
-    fijas_total = tot_portas + tot_lineas + tot_baf + tot_cp5k
+    fijas_total = tot_portas + tot_lineas + tot_baf
     
-    # 4. Ajuste por baja productividad
     subtotal_pre_prod = base_core + impacto_cp + fijas_total
     
     if v_fijas_q < 3:
@@ -155,7 +160,6 @@ def calcular_todo():
     else:
         impacto_prod = 0.0
 
-    # 5. Bonos Finales
     bonos = (12409 if l_icb else 0) + (12409 if l_comp else 0)
     total_final = max(0, subtotal_pre_prod + impacto_prod + bonos)
 
@@ -171,27 +175,24 @@ if st.button("🚀 GENERAR CÁLCULO"):
         st.divider()
         st.metric("TOTAL A LIQUIDAR", f"${d['total_final']:,.2f}")
 
-        # --- SECCIÓN: DESGLOSE VISUAL EN LA PANTALLA ---
         st.subheader("🔍 DESGLOSE DETALLADO DEL CÁLCULO")
         
         with st.expander("📋 Ver detalle línea por línea", expanded=True):
             st.markdown(f"**👤 Vendedor:** {vendedor}")
             st.markdown("---")
             
-            # Detalle de Core
             st.markdown("**📊 Indicadores Core & PSR:**")
             st.write(f"* **Escala ICB ({u_real_icb} u. de {obj_icb_u} u. = {icb_pct:.1f}%):** ${d['p_icb']:,}")
-            if exc_icb > 0:
-                st.write(f"    * *Excedentes ICB:* {exc_icb} u. × $248 = ${d['m_exc_icb']:,}")
+            if d['exc_icb'] > 0:
+                st.write(f"    * *Excedentes ICB:* {d['exc_icb']} u. × $248 = ${d['m_exc_icb']:,}")
             st.write(f"* **Escala Completos ({u_real_comp} u. de {obj_comp_u} u. = {comp_pct:.1f}%):** ${d['p_comp']:,}")
-            if exc_comp > 0:
-                st.write(f"    * *Excedentes Completos:* {exc_comp} u. × $550 = ${d['m_exc_comp']:,}")
+            if d['exc_comp'] > 0:
+                st.write(f"    * *Excedentes Completos:* {d['exc_comp']} u. × $550 = ${d['m_exc_comp']:,}")
             st.write(f"* **Escala PSR ({psr} u.):** ${d['p_psr']:,}")
             st.write(f"👉 **Subtotal Base Core:** ${d['base_core']:,}")
             
             st.markdown("---")
             
-            # Detalle Claro Pay
             st.markdown("**📱 Claro Pay Modificadores:**")
             total_mod_cp = (d['mod_si'] + d['mod_ca']) * 100
             st.write(f"* *Sell In ({si_pct}%):* {d['mod_si']*100}% | *Activaciones ({ca_q} u.):* {d['mod_ca']*100}%")
@@ -199,12 +200,10 @@ if st.button("🚀 GENERAR CÁLCULO"):
             
             st.markdown("---")
             
-            # Detalle Referidos
             st.markdown(f"**🏠 Referidos y Ventas Fijas ({d['mod_p_label']}):**")
             st.write(f"* **Portabilidades:** {portas} u. × ${d['val_porta']:,} = **${d['tot_portas']:,}**")
             st.write(f"* **Líneas Nuevas:** {lineas} u. × ${d['val_linea']:,} = **${d['tot_lineas']:,}**")
             st.write(f"* **BAF Internet:** {baf} u. × ${d['val_baf']:,} = **${d['tot_baf']:,}**")
-            st.write(f"* **Claro Pay >$5500:** {cp5k} u. × $3,500 = **${d['tot_cp5k']:,}**")
             st.write(f"👉 **Total Referidos:** ${d['fijas_total']:,}")
             
             if d['impacto_prod'] < 0:
@@ -212,7 +211,6 @@ if st.button("🚀 GENERAR CÁLCULO"):
                 
             st.markdown("---")
             
-            # Detalle Bonos
             if d['bonos'] > 0:
                 st.markdown("**🏆 Bonos de Ranking:**")
                 if l_icb: st.write("* Líder ICB: $12,409")
@@ -224,7 +222,6 @@ if st.button("🚀 GENERAR CÁLCULO"):
 
         st.divider()
 
-        # --- GENERACIÓN DE EXCEL CON PANDAS ---
         output = io.BytesIO()
         
         resumen = [
@@ -243,12 +240,12 @@ if st.button("🚀 GENERAR CÁLCULO"):
         detalle = [
             ["Concepto", "Dato de Entrada", "Detalle de Cálculo", "Monto"],
             ["Incentivo ICB", f"{u_real_icb} de {obj_icb_u} ({icb_pct:.1f}%)", f"Escala alcanzada: ${d['p_icb']}", d['p_icb']],
-            ["Excedentes ICB", f"Obj: {obj_icb_u}", f"{exc_icb} unidades x $248", d['m_exc_icb']],
+            ["Excedentes ICB", f"Obj: {obj_icb_u}", f"{d['exc_icb']} unidades x $248", d['m_exc_icb']],
             ["Incentivo Comp.", f"{u_real_comp} de {obj_comp_u} ({comp_pct:.1f}%)", f"Escala alcanzada: ${d['p_comp']}", d['p_comp']],
-            ["Excedentes Comp.", f"Obj: {obj_comp_u}", f"{exc_comp} unidades x $550", d['m_exc_comp']],
+            ["Excedentes Comp.", f"Obj: {obj_comp_u}", f"{d['exc_comp']} unidades x $550", d['m_exc_comp']],
             ["Bono PSR", f"{psr} Unidades", "Monto según escala PSR", d['p_psr']],
             ["Modificador CP", f"SI: {si_pct}% / Act: {ca_q}", f"{(d['mod_si']+d['mod_ca'])*100}% sobre Base Core", d['impacto_cp']],
-            ["Referidos Totales", f"{d['v_fijas_q']} ventas", f"Estado: {d['mod_p_label']}", d['fijas_total']],
+            ["Referidos Totales", f"{v_fijas_q} ventas", f"Estado: {d['mod_p_label']}", d['fijas_total']],
             ["Ajuste Castigo", f"< 3 ventas", "Aplica -15% sobre subtotal si corresponde", d['impacto_prod']]
         ]
 
