@@ -3,9 +3,10 @@ import pandas as pd
 from datetime import datetime
 import io
 import os
+import base64
 
 # --- CONFIGURACIÓN VISUAL Y ESTILOS ---
-st.set_page_config(page_title="Comisiones Distri-Lisu", page_icon="🔴")
+st.set_page_config(page_title="Comisiones Distri-Lisu", page_icon="🔴", layout="padded")
 
 st.markdown("""
     <style>
@@ -38,21 +39,45 @@ st.markdown("""
         border-radius: 10px;
         background-color: rgba(238, 18, 44, 0.03);
     }
-    /* Contenedor adaptativo para que la imagen no se pixele ni achique */
-    .img-container {
-        width: 100%;
-        text-align: center;
+    /* Alineación del logo y el título en la misma línea */
+    .header-container {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 20px;
     }
-    .img-container img {
-        max-width: 100% !important;
-        height: auto !important;
-        border-radius: 6px;
+    .header-container img {
+        height: 50px; /* Ajusta el tamaño del logo para que quede alineado al texto */
+        width: auto;
+        object-fit: contain;
+    }
+    .header-container h1 {
+        margin: 0 !important;
+        padding: 0 !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# TÍTULO LIMPIO
-st.title("🔴 Comisiones Distri-Lisu")
+# --- CONFIGURACIÓN DEL NOMBRE DEL ARCHIVO DE LA PLANILLA ---
+nombre_imagen = "comisiones.png" 
+# --- CONFIGURACIÓN DEL NOMBRE DEL ARCHIVO DEL LOGO ---
+nombre_logo = "logo_empresa.png" 
+
+# --- RENDERIZADO DEL TÍTULO CON LOGO EN LUGAR DEL CÍRCULO ROJO ---
+if os.path.exists(nombre_logo):
+    # Convertimos la imagen local del logo a Base64
+    with open(nombre_logo, "rb") as image_file:
+        encoded_logo = base64.b64encode(image_file.read()).decode()
+    
+    st.markdown(f"""
+        <div class="header-container">
+            <img src="data:image/png;base64,{encoded_logo}">
+            <h1>Comisiones Distri-Lisu</h1>
+        </div>
+        """, unsafe_allow_html=True)
+else:
+    # Si no encuentra el logo, muestra el título común para que no rompa la app
+    st.title("🔴 Comisiones Distri-Lisu")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
@@ -60,13 +85,9 @@ vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 with st.expander("📋 ESQUEMA COMISIONAL"):
     st.write("Consulte las escalas vigentes y valores oficiales:")
     
-    nombre_imagen = "comisiones.png.png"
-    
     if os.path.exists(nombre_imagen):
-        # Muestra la imagen de forma nativa y en alta calidad
         st.image(nombre_imagen, use_container_width=True)
         
-        # Botón para descargar/abrir la imagen en tamaño real
         with open(nombre_imagen, "rb") as file:
             st.download_button(
                 label="📥 Descargar Imagen",
@@ -76,7 +97,7 @@ with st.expander("📋 ESQUEMA COMISIONAL"):
                 use_container_width=True
             )
     else:
-        st.error("⚠️ No se encontró el archivo 'comisiones.png' en tu GitHub. Asegúrate de subir la imagen en la misma carpeta del script.")
+        st.error("⚠️ No se encontró el archivo de la imagen en tu GitHub.")
 
 # --- ENTRADA DE DATOS ---
 with st.expander("📊 INDICADORES BÁSICOS", expanded=True):
@@ -280,9 +301,26 @@ if st.button("🚀 GENERAR CÁLCULO"):
             ["Ajuste Castigo", f"< 3 ventas", "Aplica -15% sobre subtotal si corresponde", d['impacto_prod']]
         ]
 
+        # --- GENERACIÓN DE EXCEL CON AUTO-AJUSTE DE COLUMNAS ---
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             pd.DataFrame(resumen).to_excel(writer, sheet_name='Liquidacion_Resumen', index=False, header=False)
             pd.DataFrame(detalle).to_excel(writer, sheet_name='Detalle_Calculos', index=False)
+            
+            workbook = writer.book
+            
+            # Recorremos cada pestaña para agrandar las columnas según su contenido
+            for sheet_name in workbook.sheetnames:
+                worksheet = workbook[sheet_name]
+                for col in worksheet.columns:
+                    max_len = 0
+                    col_letter = col[0].column_letter
+                    
+                    for cell in col:
+                        if cell.value is not None:
+                            max_len = max(max_len, len(str(cell.value)))
+                    
+                    # Le da margen de 4 espacios al texto más largo
+                    worksheet.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
         st.download_button(
             label="📥 Descargar Reporte Full",
