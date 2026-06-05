@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import io
-import base64
 
 # --- CONFIGURACIÓN VISUAL Y ESTILOS ---
 st.set_page_config(page_title="Comisiones Distri-Lisu", page_icon="🔴")
@@ -46,11 +45,11 @@ st.title("🔴 Comisiones Distri-Lisu")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
-# --- PESTAÑA DE ESQUEMA COMISIONAL CON TU FOTO EMBEBIDA ---
+# --- PESTAÑA DE ESQUEMA COMISIONAL (LINK DIRECTO CORREGIDO) ---
 with st.expander("📋 ESQUEMA COMISIONAL (Imagen de Referencia)"):
     st.write("Consulte las escalas vigentes y valores oficiales:")
-    # Foto embebida en Base64 para que nunca falle el link
-    st.image("https://i.ibb.co/6R6tVbyT/comisiones.jpg", caption="Esquema de Comisiones Oficial", use_container_width=True)
+    # Link directo corregido para que abra la imagen real
+    st.image("https://i.ibb.co/chB1SJx7/comisiones.png", caption="Esquema de Comisiones Oficial", use_container_width=True)
 
 # --- ENTRADA DE DATOS ---
 with st.expander("📊 INDICADORES BÁSICOS", expanded=True):
@@ -86,22 +85,28 @@ with st.expander("📱 CLARO PAY"):
     ca_q = c4.number_input("Activaciones CP (Cant. Real)", min_value=0, value=0)
 
 with st.expander("🏠 REFERIDOS"):
-    c5, c6 = st.columns(2)
-    portas = c5.number_input("Portabilidades", min_value=0, value=0)
-    st.caption("*( <10: $5,000 | >=10: $6,500 )*")
+    c_ref1, c_ref2 = st.columns(2)
     
-    lineas = c6.number_input("Líneas Nuevas", min_value=0, value=0)
-    st.caption("*( <10: $2,500 | >=10: $4,000 )*")
+    with c_ref1:
+        portas = st.number_input("Portabilidades", min_value=0, value=0)
+        st.caption("*( <10: $5,000 | >=10: $6,500 )*")
+        st.write("") # Espaciador visual
+        
+        baf = st.number_input("BAF Internet", min_value=0, value=0)
+        st.caption("*( <10: $8,000 | >=10: $10,000 )*")
     
-    baf = c5.number_input("BAF Internet", min_value=0, value=0)
-    st.caption("*( <10: $8,000 | >=10: $10,000 )*")
-    
-    st.divider()
-    v_fijas_q = portas + lineas + baf
-    st.markdown(f"### 🔢 Total Referidos Cargados: `{v_fijas_q}`")
+    with c_ref2:
+        lineas = st.number_input("Líneas Nuevas", min_value=0, value=0)
+        st.caption("*( <10: $2,500 | >=10: $4,000 )*")
+        st.write("") # Espaciador visual
+        
+        # Ocupamos el espacio vacío de Claro Pay con el Contador de Referidos bien presentado
+        v_fijas_q = portas + lineas + baf
+        st.markdown("<br>", unsafe_allow_html=True) # Salto de línea estético
+        st.info(f"🔢 **Total Referidos: {v_fijas_q}**")
 
 with st.expander("🏆 BONOS RANKING"):
-    l_icb = st.checkbox("Líder ICB ($12409)")
+    l_icb = st.checkbox("Líder PSR / ICB ($12409)") # Cambio de nombre aplicado
     l_comp = st.checkbox("Líder Completos ($12409)")
 
 # --- LÓGICA DE AUDITORÍA ---
@@ -213,7 +218,7 @@ if st.button("🚀 GENERAR CÁLCULO"):
             
             if d['bonos'] > 0:
                 st.markdown("**🏆 Bonos de Ranking:**")
-                if l_icb: st.write("* Líder ICB: $12,409")
+                if l_icb: st.write("* Líder PSR / ICB: $12,409")
                 if l_comp: st.write("* Líder Completos: $12,409")
                 st.write(f"👉 **Total Bonos:** ${d['bonos']:,}")
                 st.markdown("---")
