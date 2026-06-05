@@ -69,7 +69,7 @@ with st.expander("📋 ESQUEMA COMISIONAL"):
         # Botón para descargar/abrir la imagen en tamaño real
         with open(nombre_imagen, "rb") as file:
             st.download_button(
-                label="🔍 Abrir Imagen",
+                label="📥 Descargar Imagen",
                 data=file,
                 file_name="Esquema_Comisiones.png",
                 mime="image/png",
