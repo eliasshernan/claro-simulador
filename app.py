@@ -6,7 +6,7 @@ import os
 import base64
 
 # --- CONFIGURACIÓN VISUAL Y ESTILOS ---
-st.set_page_config(page_title="Comisiones Distri-Lisu", page_icon="🔴", layout="padded")
+st.set_page_config(page_title="Comisiones Distri-Lisu", page_icon="🔴")
 
 st.markdown("""
     <style>
