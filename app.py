@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import io
+import os
 
 # --- CONFIGURACIÓN VISUAL Y ESTILOS ---
 st.set_page_config(page_title="Comisiones Distri-Lisu", page_icon="🔴")
@@ -37,11 +38,14 @@ st.markdown("""
         border-radius: 10px;
         background-color: rgba(238, 18, 44, 0.03);
     }
-    /* Ajuste para que la imagen ocupe todo el ancho sin recortarse */
+    /* Contenedor adaptativo para que la imagen no se pixele ni achique */
+    .img-container {
+        width: 100%;
+        text-align: center;
+    }
     .img-container img {
-        width: 100% !important;
+        max-width: 100% !important;
         height: auto !important;
-        object-fit: contain !important;
         border-radius: 6px;
     }
     </style>
@@ -52,21 +56,27 @@ st.title("🔴 Comisiones Distri-Lisu")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
-# --- PESTAÑA DE ESQUEMA COMISIONAL (IMAGEN INTEGRADA SIN ENLACES) ---
+# --- PESTAÑA DE ESQUEMA COMISIONAL (LOCAL DESDE GITHUB) ---
 with st.expander("📋 ESQUEMA COMISIONAL"):
     st.write("Consulte las escalas vigentes y valores oficiales:")
     
-    # Renderizado directo de la imagen original sin compresión de servidores de terceros
-    url_directa_hd = "https://i.ibb.co/6R6tVbyT/comisiones.jpg"
+    nombre_imagen = "comisiones.png.png"
     
-    st.markdown(f"""
-        <div class="img-container">
-            <img src="{url_directa_hd}" alt="Esquema Oficial">
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.write("") # Espacio estético
-    st.link_button("🔍 Abrir Imagen", url_directa_hd, use_container_width=True)
+    if os.path.exists(nombre_imagen):
+        # Muestra la imagen de forma nativa y en alta calidad
+        st.image(nombre_imagen, use_container_width=True)
+        
+        # Botón para descargar/abrir la imagen en tamaño real
+        with open(nombre_imagen, "rb") as file:
+            st.download_button(
+                label="🔍 Abrir Imagen",
+                data=file,
+                file_name="Esquema_Comisiones.png",
+                mime="image/png",
+                use_container_width=True
+            )
+    else:
+        st.error("⚠️ No se encontró el archivo 'comisiones.png' en tu GitHub. Asegúrate de subir la imagen en la misma carpeta del script.")
 
 # --- ENTRADA DE DATOS ---
 with st.expander("📊 INDICADORES BÁSICOS", expanded=True):
