@@ -45,11 +45,15 @@ st.title("🔴 Comisiones Distri-Lisu")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
-# --- PESTAÑA DE ESQUEMA COMISIONAL (LINK DIRECTO CORREGIDO) ---
-with st.expander("📋 ESQUEMA COMISIONAL (Imagen de Referencia)"):
+# --- PESTAÑA DE ESQUEMA COMISIONAL (TÍTULO Y BOTÓN AJUSTADOS) ---
+with st.expander("📋 ESQUEMA COMISIONAL"):
     st.write("Consulte las escalas vigentes y valores oficiales:")
-    # Link directo corregido para que abra la imagen real
-    st.image("https://i.ibb.co/chB1SJx7/comisiones.png", caption="Esquema de Comisiones Oficial", use_container_width=True)
+    
+    url_foto = "https://i.ibb.co/chB1SJx7/comisiones.png"
+    st.image(url_foto, caption="Esquema de Comisiones Oficial", use_container_width=True)
+    
+    # Botón con el nombre corto solicitado
+    st.link_button("🔍 Abrir Imagen", url_foto, use_container_width=True)
 
 # --- ENTRADA DE DATOS ---
 with st.expander("📊 INDICADORES BÁSICOS", expanded=True):
@@ -90,7 +94,7 @@ with st.expander("🏠 REFERIDOS"):
     with c_ref1:
         portas = st.number_input("Portabilidades", min_value=0, value=0)
         st.caption("*( <10: $5,000 | >=10: $6,500 )*")
-        st.write("") # Espaciador visual
+        st.write("") 
         
         baf = st.number_input("BAF Internet", min_value=0, value=0)
         st.caption("*( <10: $8,000 | >=10: $10,000 )*")
@@ -98,15 +102,14 @@ with st.expander("🏠 REFERIDOS"):
     with c_ref2:
         lineas = st.number_input("Líneas Nuevas", min_value=0, value=0)
         st.caption("*( <10: $2,500 | >=10: $4,000 )*")
-        st.write("") # Espaciador visual
+        st.write("") 
         
-        # Ocupamos el espacio vacío de Claro Pay con el Contador de Referidos bien presentado
         v_fijas_q = portas + lineas + baf
-        st.markdown("<br>", unsafe_allow_html=True) # Salto de línea estético
+        st.markdown("<br>", unsafe_allow_html=True) 
         st.info(f"🔢 **Total Referidos: {v_fijas_q}**")
 
 with st.expander("🏆 BONOS RANKING"):
-    l_icb = st.checkbox("Líder PSR / ICB ($12409)") # Cambio de nombre aplicado
+    l_icb = st.checkbox("Líder PSR / ICB ($12409)") 
     l_comp = st.checkbox("Líder Completos ($12409)")
 
 # --- LÓGICA DE AUDITORÍA ---
