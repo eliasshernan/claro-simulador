@@ -17,7 +17,7 @@ st.markdown("""
         height: 3em; 
         border-radius: 8px;
     }
-    /* Arreglo para que la métrica se vea en fondo blanco (Modo Claro/Oscuro) */
+    /* Arreglo para que la métrica se vea en fondo blanco */
     [data-testid="stMetricValue"] {
         color: #1e1e1e !important;
     }
@@ -37,6 +37,13 @@ st.markdown("""
         border-radius: 10px;
         background-color: rgba(238, 18, 44, 0.03);
     }
+    /* Ajuste para que la imagen ocupe todo el ancho sin recortarse */
+    .img-container img {
+        width: 100% !important;
+        height: auto !important;
+        object-fit: contain !important;
+        border-radius: 6px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -45,15 +52,21 @@ st.title("🔴 Comisiones Distri-Lisu")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
-# --- PESTAÑA DE ESQUEMA COMISIONAL (TÍTULO Y BOTÓN AJUSTADOS) ---
+# --- PESTAÑA DE ESQUEMA COMISIONAL (IMAGEN INTEGRADA SIN ENLACES) ---
 with st.expander("📋 ESQUEMA COMISIONAL"):
     st.write("Consulte las escalas vigentes y valores oficiales:")
     
-    url_foto = "https://i.ibb.co/chB1SJx7/comisiones.png"
-    st.image(url_foto, caption="Esquema de Comisiones Oficial", use_container_width=True)
+    # Renderizado directo de la imagen original sin compresión de servidores de terceros
+    url_directa_hd = "https://i.ibb.co/6R6tVbyT/comisiones.jpg"
     
-    # Botón con el nombre corto solicitado
-    st.link_button("🔍 Abrir Imagen", url_foto, use_container_width=True)
+    st.markdown(f"""
+        <div class="img-container">
+            <img src="{url_directa_hd}" alt="Esquema Oficial">
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.write("") # Espacio estético
+    st.link_button("🔍 Abrir Imagen", url_directa_hd, use_container_width=True)
 
 # --- ENTRADA DE DATOS ---
 with st.expander("📊 INDICADORES BÁSICOS", expanded=True):
