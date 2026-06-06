@@ -51,9 +51,9 @@ st.markdown("""
         width: auto;
         object-fit: contain;
         
-        /* Filtro optimizado: da el tono lila neón y elimina los cuadritos grises */
-        filter: invert(1) brightness(1.5) contrast(2) hue-rotate(140deg) saturate(3);
-        mix-blend-mode: color-dodge;
+        /* FILTRO SELECCIONADO: Mantiene el lila neón vibrante y elimina los cuadritos grises */
+        filter: contrast(1.8) hue-rotate(135deg) saturate(3.5) brightness(1.2);
+        mix-blend-mode: screen;
     }
     .header-container h1 {
         margin: 0 !important;
@@ -63,7 +63,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- CONFIGURACIÓN DE ARCHIVOS ---
-nombre_imagen = "pn.png" 
+nombre_imagen = "comisiones.png.png"  # Ajustado al nombre exacto de tu GitHub
 nombre_logo = "logo_empresa.png" 
 
 # --- TÍTULO DINÁMICO CON LOGO FILTRADO ---
@@ -309,7 +309,6 @@ if st.button("🚀 GENERAR CÁLCULO"):
             
             workbook = writer.book
             
-            # Recorremos cada pestaña para agrandar las columnas según su contenido
             for sheet_name in workbook.sheetnames:
                 worksheet = workbook[sheet_name]
                 for col in worksheet.columns:
@@ -320,7 +319,6 @@ if st.button("🚀 GENERAR CÁLCULO"):
                         if cell.value is not None:
                             max_len = max(max_len, len(str(cell.value)))
                     
-                    # Le da margen de 4 espacios al texto más largo
                     worksheet.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
         st.download_button(
