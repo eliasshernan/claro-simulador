@@ -51,8 +51,8 @@ st.markdown("""
         width: auto;
         object-fit: contain;
         
-        /* Filtro que remueve el fondo gris falso y deja las letras lila neón */
-        filter: brightness(2.5) contrast(5) invert(1) hue-rotate(140deg) saturate(3);
+        /* Filtro optimizado: Quita el fondo de cuadritos falsos y mantiene el lila neón */
+        filter: brightness(0.3) invert(1) contrast(3) hue-rotate(140deg) saturate(4);
         mix-blend-mode: screen;
     }
     .header-container h1 {
@@ -290,4 +290,43 @@ if st.button("🚀 GENERAR CÁLCULO"):
             ["TOTAL NETO FINAL", d['total_final']]
         ]
         
-        detalle =
+        detalle = [
+            ["Concepto", "Dato de Entrada", "Detalle de Cálculo", "Monto"],
+            ["Incentivo ICB", f"{u_real_icb} de {obj_icb_u} ({icb_pct:.1f}%)", f"Escala alcanzada: ${d['p_icb']}", d['p_icb']],
+            ["Excedentes ICB", f"Obj: {obj_icb_u}", f"{d['exc_icb']} unidades x $248", d['m_exc_icb']],
+            ["Incentivo Comp.", f"{u_real_comp} de {obj_comp_u} ({comp_pct:.1f}%)", f"Escala alcanzada: ${d['p_comp']}", d['p_comp']],
+            ["Excedentes Comp.", f"Obj: {obj_comp_u}", f"{d['exc_comp']} unidades x $550", d['m_exc_comp']],
+            ["Bono PSR", f"{psr} Unidades", "Monto según escala PSR", d['p_psr']],
+            ["Modificador CP", f"SI: {si_pct}% / Act: {ca_q}", f"{(d['mod_si']+d['mod_ca'])*100}% sobre Base Core", d['impacto_cp']],
+            ["Referidos Totales", f"{v_fijas_q} ventas", f"Estado: {d['mod_p_label']}", d['fijas_total']],
+            ["Ajuste Castigo", f"< 3 ventas", "Aplica -15% sobre subtotal si corresponde", d['impacto_prod']]
+        ]
+
+        # --- GENERACIÓN DE EXCEL CON AUTO-AJUSTE DE COLUMNAS ---
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            pd.DataFrame(resumen).to_excel(writer, sheet_name='Liquidacion_Resumen', index=False, header=False)
+            pd.DataFrame(detalle).to_excel(writer, sheet_name='Detalle_Calculos', index=False)
+            
+            workbook = writer.book
+            
+            # Recorremos cada pestaña para agrandar las columnas según su contenido
+            for sheet_name in workbook.sheetnames:
+                worksheet = workbook[sheet_name]
+                for col in worksheet.columns:
+                    max_len = 0
+                    col_letter = col[0].column_letter
+                    
+                    for cell in col:
+                        if cell.value is not None:
+                            max_len = max(max_len, len(str(cell.value)))
+                    
+                    # Le da margen de 4 espacios al texto más largo
+                    worksheet.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+        st.download_button(
+            label="📥 Descargar Reporte Full",
+            data=output.getvalue(),
+            file_name=f"Auditoria_{vendedor}_{datetime.now().strftime('%d_%m')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
