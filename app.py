@@ -96,7 +96,7 @@ with st.expander("📋 ESQUEMA COMISIONAL"):
             st.download_button(
                 label="📥 Descargar Imagen",
                 data=file,
-                file_name="Esquema_Comisiones.png",
+                file_name="Esquema_Comisiones.png.png",
                 mime="image/png",
                 use_container_width=True
             )
