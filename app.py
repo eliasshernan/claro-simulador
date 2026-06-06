@@ -51,9 +51,12 @@ st.markdown("""
         width: auto;
         object-fit: contain;
         
-        /* 🚨 SOLUCIÓN DEFINITIVA: Invierte los colores oscuros para que brillen en el modo noche 
-           y rota el color para devolverle el ROJO vivo a las letras */
-        filter: invert(1) hue-rotate(180deg) brightness(1.4) contrast(1.2);
+        /* 🚨 TRUCO DEFINITIVO PARA FALSOS PNGs: 
+           1. Forzamos los cuadritos grises a volverse blanco puro con brillo y contraste extremo.
+           2. Usamos 'multiply' para hacer desaparecer todo el blanco.
+           3. Invertimos y rotamos el color de las letras para que queden en un tono naranja/rojo neón visible en fondo oscuro. */
+        filter: brightness(2.5) contrast(5) invert(1) hue-rotate(140deg) saturate(3);
+        mix-blend-mode: screen;
     }
     .header-container h1 {
         margin: 0 !important;
