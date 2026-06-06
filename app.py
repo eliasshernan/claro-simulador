@@ -50,9 +50,10 @@ st.markdown("""
         height: 52px;
         width: auto;
         object-fit: contain;
-        /* Mezcla el fondo falso PNG de cuadritos con el fondo oscuro/claro de la app */
-        mix-blend-mode: multiply; 
-        filter: contrast(150%) brightness(105%); 
+        
+        /* 🚨 SOLUCIÓN DEFINITIVA: Invierte los colores oscuros para que brillen en el modo noche 
+           y rota el color para devolverle el ROJO vivo a las letras */
+        filter: invert(1) hue-rotate(180deg) brightness(1.4) contrast(1.2);
     }
     .header-container h1 {
         margin: 0 !important;
