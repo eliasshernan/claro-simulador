@@ -39,7 +39,7 @@ st.markdown("""
         border-radius: 10px;
         background-color: rgba(238, 18, 44, 0.03);
     }
-    /* Alineación del logo y el título en la misma línea con filtro de transparencia */
+    /* Alineación del logo y el título en la misma línea */
     .header-container {
         display: flex;
         align-items: center;
@@ -51,9 +51,9 @@ st.markdown("""
         width: auto;
         object-fit: contain;
         
-        /* Filtro optimizado: Quita el fondo de cuadritos falsos y mantiene el lila neón */
-        filter: brightness(0.3) invert(1) contrast(3) hue-rotate(140deg) saturate(4);
-        mix-blend-mode: screen;
+        /* Filtro optimizado: da el tono lila neón y elimina los cuadritos grises */
+        filter: invert(1) brightness(1.5) contrast(2) hue-rotate(140deg) saturate(3);
+        mix-blend-mode: color-dodge;
     }
     .header-container h1 {
         margin: 0 !important;
@@ -63,7 +63,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- CONFIGURACIÓN DE ARCHIVOS ---
-nombre_imagen = "comisiones.png" 
+nombre_imagen = "pn.png" 
 nombre_logo = "logo_empresa.png" 
 
 # --- TÍTULO DINÁMICO CON LOGO FILTRADO ---
