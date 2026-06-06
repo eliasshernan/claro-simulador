@@ -39,7 +39,7 @@ st.markdown("""
         border-radius: 10px;
         background-color: rgba(238, 18, 44, 0.03);
     }
-    /* Alineación del logo y el título en la misma línea */
+    /* Alineación del logo y el título en la misma línea con filtro de transparencia */
     .header-container {
         display: flex;
         align-items: center;
@@ -47,9 +47,12 @@ st.markdown("""
         margin-bottom: 20px;
     }
     .header-container img {
-        height: 50px; /* Ajusta el tamaño del logo para que quede alineado al texto */
+        height: 52px;
         width: auto;
         object-fit: contain;
+        /* Mezcla el fondo falso PNG de cuadritos con el fondo oscuro/claro de la app */
+        mix-blend-mode: multiply; 
+        filter: contrast(150%) brightness(105%); 
     }
     .header-container h1 {
         margin: 0 !important;
@@ -58,14 +61,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- CONFIGURACIÓN DEL NOMBRE DEL ARCHIVO DE LA PLANILLA ---
+# --- CONFIGURACIÓN DE ARCHIVOS ---
 nombre_imagen = "comisiones.png" 
-# --- CONFIGURACIÓN DEL NOMBRE DEL ARCHIVO DEL LOGO ---
 nombre_logo = "logo_empresa.png" 
 
-# --- RENDERIZADO DEL TÍTULO CON LOGO EN LUGAR DEL CÍRCULO ROJO ---
+# --- TÍTULO DINÁMICO CON LOGO FILTRADO ---
 if os.path.exists(nombre_logo):
-    # Convertimos la imagen local del logo a Base64
     with open(nombre_logo, "rb") as image_file:
         encoded_logo = base64.b64encode(image_file.read()).decode()
     
@@ -76,12 +77,11 @@ if os.path.exists(nombre_logo):
         </div>
         """, unsafe_allow_html=True)
 else:
-    # Si no encuentra el logo, muestra el título común para que no rompa la app
     st.title("🔴 Comisiones Distri-Lisu")
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
-# --- PESTAÑA DE ESQUEMA COMISIONAL (LOCAL DESDE GITHUB) ---
+# --- PESTAÑA DE ESQUEMA COMISIONAL ---
 with st.expander("📋 ESQUEMA COMISIONAL"):
     st.write("Consulte las escalas vigentes y valores oficiales:")
     
