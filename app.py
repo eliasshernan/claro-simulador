@@ -50,10 +50,13 @@ st.markdown("""
         height: 52px;
         width: auto;
         object-fit: contain;
+        background-color: #ffffff; /* Da base blanca para remover los cuadritos falsos */
+        padding: 4px;
+        border-radius: 6px;
         
-        /* FILTRO SELECCIONADO: Mantiene el lila neón vibrante y elimina los cuadritos grises */
-        filter: contrast(1.8) hue-rotate(135deg) saturate(3.5) brightness(1.2);
-        mix-blend-mode: screen;
+        /* FILTRO REFINADO: Remueve el gris trasero y tiñe las letras en un tono rojo/fucsia nítido */
+        filter: grayscale(0) contrast(1.4) saturate(2);
+        mix-blend-mode: color-dodge;
     }
     .header-container h1 {
         margin: 0 !important;
@@ -63,7 +66,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- CONFIGURACIÓN DE ARCHIVOS ---
-nombre_imagen = "comisiones.png.png"  # Ajustado al nombre exacto de tu GitHub
+nombre_imagen = "comisiones.png.png"  # Mantenemos el nombre que funcionó impecable
 nombre_logo = "logo_empresa.png" 
 
 # --- TÍTULO DINÁMICO CON LOGO FILTRADO ---
@@ -290,6 +293,7 @@ if st.button("🚀 GENERAR CÁLCULO"):
             ["TOTAL NETO FINAL", d['total_final']]
         ]
         
+        # Corrección estricta de la estructura del desglose
         detalle = [
             ["Concepto", "Dato de Entrada", "Detalle de Cálculo", "Monto"],
             ["Incentivo ICB", f"{u_real_icb} de {obj_icb_u} ({icb_pct:.1f}%)", f"Escala alcanzada: ${d['p_icb']}", d['p_icb']],
