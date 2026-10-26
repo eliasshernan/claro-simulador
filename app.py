@@ -1,82 +1,150 @@
-import streamlit as st
-import pandas as pd
-from datetime import datetime
+import base64
 import io
 import os
-import base64
+import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-# --- CONFIGURACIÓN VISUAL Y ESTILOS ---
+import pandas as pd
+import streamlit as st
+
+from calculos import BONO_LIDER, VALOR_EXC_COMP, VALOR_EXC_ICB, calcular_comision, excedentes, porcentaje
+
 st.set_page_config(page_title="Comisiones Distri-Lisu", page_icon="🔴")
+
+NOMBRE_IMAGEN = "comisiones.png.png"
+NOMBRE_LOGO = "logo_empresa.png"
+TZ = ZoneInfo("America/Argentina/Buenos_Aires")
 
 st.markdown("""
     <style>
-    /* Botón principal */
-    .stButton>button { 
-        background-color: #ee122c; 
-        color: white; 
-        font-weight: bold; 
-        width: 100%; 
-        height: 3em; 
-        border-radius: 8px;
-    }
-    /* Arreglo para que la métrica se vea en fondo blanco */
-    [data-testid="stMetricValue"] {
-        color: #1e1e1e !important;
-    }
-    [data-testid="stMetricLabel"] {
-        color: #555555 !important;
-    }
-    .stMetric { 
-        background-color: #ffffff; 
-        padding: 20px; 
-        border-radius: 12px; 
-        border: 2px solid #ee122c;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
-    }
-    /* Estilo de los expanders */
-    [data-testid="stExpander"] {
-        border: 1px solid #ddd;
-        border-radius: 10px;
-        background-color: rgba(238, 18, 44, 0.03);
-    }
-    /* Alineación del logo y el título en la misma línea */
-    .header-container {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        margin-bottom: 20px;
-    }
-    .header-container img {
-        height: 52px;
-        width: auto;
-        object-fit: contain;
-        background-color: #ffffff; /* Da base blanca para remover los cuadritos falsos */
-        padding: 4px;
-        border-radius: 6px;
-        
-        /* FILTRO REFINADO: Remueve el gris trasero y tiñe las letras en un tono rojo/fucsia nítido */
-        filter: grayscale(0) contrast(1.4) saturate(2);
-        mix-blend-mode: color-dodge;
-    }
-    .header-container h1 {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
+    .stButton>button { background-color: #ee122c; color: white; font-weight: bold;
+        width: 100%; height: 3em; border-radius: 8px; }
+    [data-testid="stMetricValue"] { color: #1e1e1e !important; }
+    [data-testid="stMetricLabel"] { color: #555555 !important; }
+    .stMetric { background-color: #ffffff; padding: 20px; border-radius: 12px;
+        border: 2px solid #ee122c; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); }
+    [data-testid="stExpander"] { border: 1px solid #ddd; border-radius: 10px;
+        background-color: rgba(238, 18, 44, 0.03); }
+    .header-container { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
+    .header-container img { height: 52px; width: auto; object-fit: contain;
+        background-color: #ffffff; padding: 4px; border-radius: 6px;
+        filter: grayscale(0) contrast(1.4) saturate(2); mix-blend-mode: color-dodge; }
+    .header-container h1 { margin: 0 !important; padding: 0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- CONFIGURACIÓN DE ARCHIVOS ---
-nombre_imagen = "comisiones.png.png"  # Mantenemos el nombre que funcionó impecable
-nombre_logo = "logo_empresa.png" 
 
-# --- TÍTULO DINÁMICO CON LOGO FILTRADO ---
-if os.path.exists(nombre_logo):
-    with open(nombre_logo, "rb") as image_file:
-        encoded_logo = base64.b64encode(image_file.read()).decode()
-    
+def pesos(x):
+    return f"${x:,.2f}"
+
+
+@st.cache_data
+def logo_base64(ruta):
+    with open(ruta, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+
+def generar_excel(res):
+    d, e = res["d"], res["entradas"]
+    resumen = [
+        ["CONCEPTO", "VALOR"],
+        ["Vendedor", res["vendedor"]],
+        ["Fecha Auditoría", res["fecha"].strftime("%d/%m/%Y %H:%M")],
+        ["BASE CORE (Escalas + Exc)", d["base_core"]],
+        ["IMPACTO CLARO PAY", d["impacto_cp"]],
+        ["TOTAL REFERIDOS", d["fijas_total"]],
+        ["DESCUENTO PRODUCTIVIDAD (<3 vtas)", d["impacto_prod"]],
+        ["BONOS RANKING LÍDER", d["bonos"]],
+        ["TOTAL NETO FINAL", d["total_final"]],
+    ]
+    detalle = [
+        ["Concepto", "Dato de Entrada", "Detalle de Cálculo", "Monto"],
+        ["Incentivo ICB", f"{e['u_icb']} de {e['obj_icb']} ({d['icb_pct']:.1f}%)", f"Escala alcanzada: ${d['p_icb']:,}", d["p_icb"]],
+        ["Excedentes ICB", f"Obj: {e['obj_icb']}", f"{d['exc_icb']} unidades x ${VALOR_EXC_ICB}", d["m_exc_icb"]],
+        ["Incentivo Comp.", f"{e['u_comp']} de {e['obj_comp']} ({d['comp_pct']:.1f}%)", f"Escala alcanzada: ${d['p_comp']:,}", d["p_comp"]],
+        ["Excedentes Comp.", f"Obj: {e['obj_comp']}", f"{d['exc_comp']} unidades x ${VALOR_EXC_COMP}", d["m_exc_comp"]],
+        ["Bono PSR", f"{e['psr']} Unidades", "Monto según escala PSR", d["p_psr"]],
+        ["Modificador CP", f"SI: {e['si_pct']}% / Act: {e['ca_q']}", f"{(d['mod_si'] + d['mod_ca']) * 100:.0f}% sobre Base Core", d["impacto_cp"]],
+        ["Referidos Totales", f"{d['v_fijas_q']} ventas", f"Estado: {d['mod_p_label']}", d["fijas_total"]],
+        ["Ajuste Castigo", "< 3 ventas", "Aplica -15% sobre subtotal si corresponde", d["impacto_prod"]],
+    ]
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        pd.DataFrame(resumen).to_excel(writer, sheet_name="Liquidacion_Resumen", index=False, header=False)
+        pd.DataFrame(detalle).to_excel(writer, sheet_name="Detalle_Calculos", index=False)
+        for ws in writer.book.worksheets:
+            for col in ws.columns:
+                largo = max(len(str(c.value)) for c in col if c.value is not None)
+                ws.column_dimensions[col[0].column_letter].width = max(largo + 4, 12)
+            for fila in ws.iter_rows():
+                for c in fila:
+                    if isinstance(c.value, (int, float)):
+                        c.number_format = "$#,##0.00"
+    return output.getvalue()
+
+
+def mostrar_resultado(res):
+    d, e, vendedor = res["d"], res["entradas"], res["vendedor"]
+    st.divider()
+    st.metric("TOTAL A LIQUIDAR", pesos(d["total_final"]))
+    st.subheader("🔍 DESGLOSE DETALLADO DEL CÁLCULO")
+
+    with st.expander("📋 Ver detalle línea por línea", expanded=True):
+        st.markdown(f"**👤 Vendedor:** {vendedor}")
+        st.markdown("---")
+        st.markdown("**📊 Indicadores Core & PSR:**")
+        st.write(f"* **Escala ICB ({e['u_icb']} u. de {e['obj_icb']} u. = {d['icb_pct']:.1f}%):** {pesos(d['p_icb'])}")
+        if d["exc_icb"] > 0:
+            st.write(f"    * *Excedentes ICB:* {d['exc_icb']} u. × ${VALOR_EXC_ICB} = {pesos(d['m_exc_icb'])}")
+        st.write(f"* **Escala Completos ({e['u_comp']} u. de {e['obj_comp']} u. = {d['comp_pct']:.1f}%):** {pesos(d['p_comp'])}")
+        if d["exc_comp"] > 0:
+            st.write(f"    * *Excedentes Completos:* {d['exc_comp']} u. × ${VALOR_EXC_COMP} = {pesos(d['m_exc_comp'])}")
+        st.write(f"* **Escala PSR ({e['psr']} u.):** {pesos(d['p_psr'])}")
+        st.write(f"👉 **Subtotal Base Core:** {pesos(d['base_core'])}")
+        st.markdown("---")
+
+        st.markdown("**📱 Claro Pay Modificadores:**")
+        total_mod = (d["mod_si"] + d["mod_ca"]) * 100
+        st.write(f"* *Sell In ({e['si_pct']}%):* {d['mod_si'] * 100:.0f}% | *Activaciones ({e['ca_q']} u.):* {d['mod_ca'] * 100:.0f}%")
+        st.write(f"👉 **Impacto Claro Pay ({total_mod:.0f}% sobre Core):** {pesos(d['impacto_cp'])}")
+        st.markdown("---")
+
+        st.markdown(f"**🏠 Referidos y Ventas Fijas ({d['mod_p_label']}):**")
+        st.write(f"* **Portabilidades:** {e['portas']} u. × ${d['val_porta']:,} = **{pesos(d['tot_portas'])}**")
+        st.write(f"* **Líneas Nuevas:** {e['lineas']} u. × ${d['val_linea']:,} = **{pesos(d['tot_lineas'])}**")
+        st.write(f"* **BAF Internet:** {e['baf']} u. × ${d['val_baf']:,} = **{pesos(d['tot_baf'])}**")
+        st.write(f"👉 **Total Referidos:** {pesos(d['fijas_total'])}")
+        if d["impacto_prod"] < 0:
+            st.markdown(f"⚠️ **Descuento por baja productividad (<3 ventas):** {pesos(d['impacto_prod'])}")
+        st.markdown("---")
+
+        if d["bonos"] > 0:
+            st.markdown("**🏆 Bonos de Ranking:**")
+            if e["lider_icb"]:
+                st.write(f"* Líder PSR / ICB: ${BONO_LIDER:,}")
+            if e["lider_comp"]:
+                st.write(f"* Líder Completos: ${BONO_LIDER:,}")
+            st.write(f"👉 **Total Bonos:** {pesos(d['bonos'])}")
+            st.markdown("---")
+        st.markdown(f"### **💰 NETO TOTAL ACUMULADO: {pesos(d['total_final'])}**")
+
+    st.divider()
+    seguro = re.sub(r"[^\w-]", "_", vendedor)
+    st.download_button(
+        label="📥 Descargar Reporte Full",
+        data=generar_excel(res),
+        file_name=f"Auditoria_{seguro}_{res['fecha'].strftime('%d_%m')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+
+
+# --- TÍTULO ---
+if os.path.exists(NOMBRE_LOGO):
     st.markdown(f"""
         <div class="header-container">
-            <img src="data:image/png;base64,{encoded_logo}">
+            <img src="data:image/png;base64,{logo_base64(NOMBRE_LOGO)}">
             <h1>Comisiones Distri-Lisu</h1>
         </div>
         """, unsafe_allow_html=True)
@@ -85,250 +153,73 @@ else:
 
 vendedor = st.text_input("Nombre del Vendedor", placeholder="Ej: Elias")
 
-# --- PESTAÑA DE ESQUEMA COMISIONAL ---
 with st.expander("📋 ESQUEMA COMISIONAL"):
     st.write("Consulte las escalas vigentes y valores oficiales:")
-    
-    if os.path.exists(nombre_imagen):
-        st.image(nombre_imagen, use_container_width=True)
-        
-        with open(nombre_imagen, "rb") as file:
-            st.download_button(
-                label="📥 Descargar Imagen",
-                data=file,
-                file_name="Esquema_Comisiones.png",
-                mime="image/png",
-                use_container_width=True
-            )
+    if os.path.exists(NOMBRE_IMAGEN):
+        st.image(NOMBRE_IMAGEN, use_container_width=True)
+        with open(NOMBRE_IMAGEN, "rb") as f:
+            st.download_button("📥 Descargar Imagen", data=f, file_name="Esquema_Comisiones.png",
+                               mime="image/png", use_container_width=True)
     else:
-        st.error("⚠️ No se encontró el archivo de la imagen en tu GitHub.")
+        st.error("⚠️ No se encontró la imagen del esquema comisional.")
 
 # --- ENTRADA DE DATOS ---
 with st.expander("📊 INDICADORES BÁSICOS", expanded=True):
     c1, c2 = st.columns(2)
     with c1:
         st.subheader("ICB")
-        obj_icb_u = st.number_input("Objetivo ICB (Unidades)", min_value=1, value=100)
-        u_real_icb = st.number_input("Alcance logrado ICB", min_value=0, value=0)
-        
-        icb_pct = (u_real_icb / obj_icb_u) * 100 if obj_icb_u > 0 else 0.0
-        st.caption(f"Alcance calculado: {icb_pct:.1f}%")
-        
-        exc_icb = max(0, int(((icb_pct - 110) / 100) * obj_icb_u)) if icb_pct > 110 else 0
-        st.caption(f"Excedentes detectados: {exc_icb}")
-
+        obj_icb = st.number_input("Objetivo ICB (Unidades)", min_value=1, value=100)
+        u_icb = st.number_input("Alcance logrado ICB", min_value=0, value=0)
+        pct = porcentaje(u_icb, obj_icb)
+        st.caption(f"Alcance calculado: {pct:.1f}%")
+        st.caption(f"Excedentes detectados: {excedentes(pct, obj_icb)}")
     with c2:
         st.subheader("Completos")
-        obj_comp_u = st.number_input("Objetivo Comp. (Unidades)", min_value=1, value=100)
-        u_real_comp = st.number_input("Alcance logrado Completos", min_value=0, value=0)
-        
-        comp_pct = (u_real_comp / obj_comp_u) * 100 if obj_comp_u > 0 else 0.0
-        st.caption(f"Alcance calculado: {comp_pct:.1f}%")
-        
-        exc_comp = max(0, int(((comp_pct - 110) / 100) * obj_comp_u)) if comp_pct > 110 else 0
-        st.caption(f"Excedentes detectados: {exc_comp}")
-    
+        obj_comp = st.number_input("Objetivo Comp. (Unidades)", min_value=1, value=100)
+        u_comp = st.number_input("Alcance logrado Completos", min_value=0, value=0)
+        pct = porcentaje(u_comp, obj_comp)
+        st.caption(f"Alcance calculado: {pct:.1f}%")
+        st.caption(f"Excedentes detectados: {excedentes(pct, obj_comp)}")
     st.divider()
     psr = st.number_input("Cantidad PSR/ICB Total", min_value=0, value=0)
 
 with st.expander("📱 CLARO PAY"):
     c3, c4 = st.columns(2)
-    si_pct = c3.number_input("% Sell In CP", min_value=0.0, value=75.0)
+    si_pct = c3.number_input("% Sell In CP", min_value=0.0, max_value=100.0, value=75.0)
     ca_q = c4.number_input("Activaciones CP (Cant. Real)", min_value=0, value=0)
 
 with st.expander("🏠 REFERIDOS"):
-    c_ref1, c_ref2 = st.columns(2)
-    
-    with c_ref1:
+    r1, r2 = st.columns(2)
+    with r1:
         portas = st.number_input("Portabilidades", min_value=0, value=0)
         st.caption("*( <10: $5,000 | >=10: $6,500 )*")
-        st.write("") 
-        
+        st.write("")
         baf = st.number_input("BAF Internet", min_value=0, value=0)
         st.caption("*( <10: $8,000 | >=10: $10,000 )*")
-    
-    with c_ref2:
+    with r2:
         lineas = st.number_input("Líneas Nuevas", min_value=0, value=0)
         st.caption("*( <10: $2,500 | >=10: $4,000 )*")
-        st.write("") 
-        
-        v_fijas_q = portas + lineas + baf
-        st.markdown("<br>", unsafe_allow_html=True) 
-        st.info(f"🔢 **Total Referidos: {v_fijas_q}**")
+        st.write("")
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.info(f"🔢 **Total Referidos: {portas + lineas + baf}**")
 
 with st.expander("🏆 BONOS RANKING"):
-    l_icb = st.checkbox("Líder PSR / ICB ($12409)") 
-    l_comp = st.checkbox("Líder Completos ($12409)")
+    lider_icb = st.checkbox(f"Líder PSR / ICB (${BONO_LIDER:,})")
+    lider_comp = st.checkbox(f"Líder Completos (${BONO_LIDER:,})")
 
-# --- LÓGICA DE AUDITORÍA ---
-def calcular_todo():
-    def escala(pct):
-        if pct >= 110: return 127499
-        elif pct >= 105: return 108752
-        elif pct >= 100: return 90000
-        elif pct >= 90: return 58500
-        elif pct >= 80: return 36000
-        return 0
-
-    p_icb = escala(icb_pct)
-    p_comp = escala(comp_pct)
-    
-    p_psr = 183600 if psr >= 144 else 151200 if psr >= 132 else 120000 if psr >= 125 else 78000 if psr >= 108 else 0
-    
-    exc_icb = max(0, int(((icb_pct - 110) / 100) * obj_icb_u)) if icb_pct > 110 else 0
-    exc_comp = max(0, int(((comp_pct - 110) / 100) * obj_comp_u)) if comp_pct > 110 else 0
-    
-    m_exc_icb = exc_icb * 248
-    m_exc_comp = exc_comp * 550
-    
-    base_core = p_icb + p_comp + p_psr + m_exc_icb + m_exc_comp
-
-    mod_si = 0.2 if si_pct>=80 else 0.1 if si_pct>=75 else 0.0 if si_pct>=70 else -0.25 if si_pct>=60 else -0.5
-    mod_ca = 0.2 if ca_q>=44 else 0.1 if ca_q>=38 else 0.0 if ca_q>=31 else -0.25 if ca_q>=24 else -0.5
-    impacto_cp = base_core * (mod_si + mod_ca)
-
-    if v_fijas_q >= 10:
-        val_porta = 6500
-        val_linea = 4000
-        val_baf = 10000
-        mod_p_label = "Premio Premium (>=10 ventas)"
-    elif v_fijas_q >= 3:
-        val_porta = 5000
-        val_linea = 2500
-        val_baf = 8000
-        mod_p_label = "Rango Neutro (3-9 ventas)"
-    else:
-        val_porta = 5000
-        val_linea = 2500
-        val_baf = 8000
-        mod_p_label = "Penalización -15% (<3 ventas)"
-        
-    tot_portas = portas * val_porta
-    tot_lineas = lineas * val_linea
-    tot_baf = baf * val_baf
-    
-    fijas_total = tot_portas + tot_lineas + tot_baf
-    
-    subtotal_pre_prod = base_core + impacto_cp + fijas_total
-    
-    if v_fijas_q < 3:
-        impacto_prod = subtotal_pre_prod * -0.15
-    else:
-        impacto_prod = 0.0
-
-    bonos = (12409 if l_icb else 0) + (12409 if l_comp else 0)
-    total_final = max(0, subtotal_pre_prod + impacto_prod + bonos)
-
-    return locals()
-
-# --- BOTÓN DE ACCIÓN ---
+# --- ACCIÓN ---
 if st.button("🚀 GENERAR CÁLCULO"):
-    if not vendedor:
+    if not vendedor.strip():
         st.warning("⚠️ Por favor, ingresa el nombre del vendedor.")
     else:
-        d = calcular_todo()
-        
-        st.divider()
-        st.metric("TOTAL A LIQUIDAR", f"${d['total_final']:,.2f}")
+        entradas = dict(u_icb=u_icb, obj_icb=obj_icb, u_comp=u_comp, obj_comp=obj_comp, psr=psr,
+                        si_pct=si_pct, ca_q=ca_q, portas=portas, lineas=lineas, baf=baf,
+                        lider_icb=lider_icb, lider_comp=lider_comp)
+        st.session_state["resultado"] = {
+            "vendedor": vendedor.strip(), "fecha": datetime.now(TZ),
+            "entradas": entradas, "d": calcular_comision(**entradas),
+        }
 
-        st.subheader("🔍 DESGLOSE DETALLADO DEL CÁLCULO")
-        
-        with st.expander("📋 Ver detalle línea por línea", expanded=True):
-            st.markdown(f"**👤 Vendedor:** {vendedor}")
-            st.markdown("---")
-            
-            st.markdown("**📊 Indicadores Core & PSR:**")
-            st.write(f"* **Escala ICB ({u_real_icb} u. de {obj_icb_u} u. = {icb_pct:.1f}%):** ${d['p_icb']:,}")
-            if d['exc_icb'] > 0:
-                st.write(f"    * *Excedentes ICB:* {d['exc_icb']} u. × $248 = ${d['m_exc_icb']:,}")
-            st.write(f"* **Escala Completos ({u_real_comp} u. de {obj_comp_u} u. = {comp_pct:.1f}%):** ${d['p_comp']:,}")
-            if d['exc_comp'] > 0:
-                st.write(f"    * *Excedentes Completos:* {d['exc_comp']} u. × $550 = ${d['m_exc_comp']:,}")
-            st.write(f"* **Escala PSR ({psr} u.):** ${d['p_psr']:,}")
-            st.write(f"👉 **Subtotal Base Core:** ${d['base_core']:,}")
-            
-            st.markdown("---")
-            
-            st.markdown("**📱 Claro Pay Modificadores:**")
-            total_mod_cp = (d['mod_si'] + d['mod_ca']) * 100
-            st.write(f"* *Sell In ({si_pct}%):* {d['mod_si']*100}% | *Activaciones ({ca_q} u.):* {d['mod_ca']*100}%")
-            st.write(f"👉 **Impacto Claro Pay ({total_mod_cp}% sobre Core):** ${d['impacto_cp']:,}")
-            
-            st.markdown("---")
-            
-            st.markdown(f"**🏠 Referidos y Ventas Fijas ({d['mod_p_label']}):**")
-            st.write(f"* **Portabilidades:** {portas} u. × ${d['val_porta']:,} = **${d['tot_portas']:,}**")
-            st.write(f"* **Líneas Nuevas:** {lineas} u. × ${d['val_linea']:,} = **${d['tot_lineas']:,}**")
-            st.write(f"* **BAF Internet:** {baf} u. × ${d['val_baf']:,} = **${d['tot_baf']:,}**")
-            st.write(f"👉 **Total Referidos:** ${d['fijas_total']:,}")
-            
-            if d['impacto_prod'] < 0:
-                st.markdown(f"⚠️ **Descuento por baja productividad (<3 ventas):** ${d['impacto_prod']:,}")
-                
-            st.markdown("---")
-            
-            if d['bonos'] > 0:
-                st.markdown("**🏆 Bonos de Ranking:**")
-                if l_icb: st.write("* Líder PSR / ICB: $12,409")
-                if l_comp: st.write("* Líder Completos: $12,409")
-                st.write(f"👉 **Total Bonos:** ${d['bonos']:,}")
-                st.markdown("---")
-                
-            st.markdown(f"### **💰 NETO TOTAL ACUMULADO: ${d['total_final']:,.2f}**")
-
-        st.divider()
-
-        output = io.BytesIO()
-        
-        resumen = [
-            ["CONCEPTO", "VALOR"],
-            ["Vendedor", vendedor],
-            ["Fecha Auditoría", datetime.now().strftime("%d/%m/%Y %H:%M")],
-            ["---", "---"],
-            ["BASE CORE (Escalas + Exc)", d['base_core']],
-            ["IMPACTO CLARO PAY", d['impacto_cp']],
-            ["TOTAL REFERIDOS (CON PRODUCTIVIDAD)", d['fijas_total']],
-            ["DESCUENTO PRODUCTIVIDAD (<3 vtas)", d['impacto_prod']],
-            ["BONOS RANKING LÍDER", d['bonos']],
-            ["TOTAL NETO FINAL", d['total_final']]
-        ]
-        
-        # Corrección estricta de la estructura del desglose
-        detalle = [
-            ["Concepto", "Dato de Entrada", "Detalle de Cálculo", "Monto"],
-            ["Incentivo ICB", f"{u_real_icb} de {obj_icb_u} ({icb_pct:.1f}%)", f"Escala alcanzada: ${d['p_icb']}", d['p_icb']],
-            ["Excedentes ICB", f"Obj: {obj_icb_u}", f"{d['exc_icb']} unidades x $248", d['m_exc_icb']],
-            ["Incentivo Comp.", f"{u_real_comp} de {obj_comp_u} ({comp_pct:.1f}%)", f"Escala alcanzada: ${d['p_comp']}", d['p_comp']],
-            ["Excedentes Comp.", f"Obj: {obj_comp_u}", f"{d['exc_comp']} unidades x $550", d['m_exc_comp']],
-            ["Bono PSR", f"{psr} Unidades", "Monto según escala PSR", d['p_psr']],
-            ["Modificador CP", f"SI: {si_pct}% / Act: {ca_q}", f"{(d['mod_si']+d['mod_ca'])*100}% sobre Base Core", d['impacto_cp']],
-            ["Referidos Totales", f"{v_fijas_q} ventas", f"Estado: {d['mod_p_label']}", d['fijas_total']],
-            ["Ajuste Castigo", f"< 3 ventas", "Aplica -15% sobre subtotal si corresponde", d['impacto_prod']]
-        ]
-
-        # --- GENERACIÓN DE EXCEL CON AUTO-AJUSTE DE COLUMNAS ---
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            pd.DataFrame(resumen).to_excel(writer, sheet_name='Liquidacion_Resumen', index=False, header=False)
-            pd.DataFrame(detalle).to_excel(writer, sheet_name='Detalle_Calculos', index=False)
-            
-            workbook = writer.book
-            
-            for sheet_name in workbook.sheetnames:
-                worksheet = workbook[sheet_name]
-                for col in worksheet.columns:
-                    max_len = 0
-                    col_letter = col[0].column_letter
-                    
-                    for cell in col:
-                        if cell.value is not None:
-                            max_len = max(max_len, len(str(cell.value)))
-                    
-                    worksheet.column_dimensions[col_letter].width = max(max_len + 4, 12)
-
-        st.download_button(
-            label="📥 Descargar Reporte Full",
-            data=output.getvalue(),
-            file_name=f"Auditoria_{vendedor}_{datetime.now().strftime('%d_%m')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+# El resultado queda en session_state: sobrevive al hacer clic en "Descargar"
+if "resultado" in st.session_state:
+    mostrar_resultado(st.session_state["resultado"])
