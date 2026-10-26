@@ -2,20 +2,101 @@ import base64
 import io
 import os
 import re
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import streamlit as st
 
-from calculos import BONO_LIDER, VALOR_EXC_COMP, VALOR_EXC_ICB, calcular_comision, excedentes, porcentaje
-
 st.set_page_config(page_title="Comisiones Distri-Lisu", page_icon="🔴")
+
+# ====== ESQUEMA COMISIONAL: si cambian los valores, se editan solo acá ======
+ESCALA_PCT = [(110, 127_499), (105, 108_752), (100, 90_000), (90, 58_500), (80, 36_000)]
+ESCALA_PSR = [(144, 183_600), (132, 151_200), (125, 120_000), (108, 78_000)]
+UMBRAL_EXCEDENTE = 110
+VALOR_EXC_ICB = 248
+VALOR_EXC_COMP = 550
+MOD_SELL_IN = [(80, 0.2), (75, 0.1), (70, 0.0), (60, -0.25)]
+MOD_ACTIVACIONES = [(44, 0.2), (38, 0.1), (31, 0.0), (24, -0.25)]
+MOD_MINIMO = -0.5
+UMBRAL_PREMIUM = 10
+MIN_VENTAS_FIJAS = 3
+PENALIZACION = -0.15
+VALORES_BASE = {"porta": 5_000, "linea": 2_500, "baf": 8_000}
+VALORES_PREMIUM = {"porta": 6_500, "linea": 4_000, "baf": 10_000}
+BONO_LIDER = 12_409
+# ===========================================================================
 
 NOMBRE_IMAGEN = "comisiones.png.png"
 NOMBRE_LOGO = "logo_empresa.png"
-TZ = ZoneInfo("America/Argentina/Buenos_Aires")
+TZ = timezone(timedelta(hours=-3))  # Argentina
 
+
+# --- LÓGICA DE CÁLCULO ---
+def buscar_escala(valor, tabla, defecto=0):
+    return next((res for umbral, res in tabla if valor >= umbral), defecto)
+
+
+def porcentaje(real, objetivo):
+    return real / objetivo * 100 if objetivo > 0 else 0.0
+
+
+def excedentes(pct, objetivo):
+    if pct <= UMBRAL_EXCEDENTE:
+        return 0
+    return max(0, int((pct - UMBRAL_EXCEDENTE) / 100 * objetivo))
+
+
+def calcular_comision(u_icb, obj_icb, u_comp, obj_comp, psr, si_pct, ca_q,
+                      portas, lineas, baf, lider_icb=False, lider_comp=False):
+    icb_pct = porcentaje(u_icb, obj_icb)
+    comp_pct = porcentaje(u_comp, obj_comp)
+    exc_icb = excedentes(icb_pct, obj_icb)
+    exc_comp = excedentes(comp_pct, obj_comp)
+
+    p_icb = buscar_escala(icb_pct, ESCALA_PCT)
+    p_comp = buscar_escala(comp_pct, ESCALA_PCT)
+    p_psr = buscar_escala(psr, ESCALA_PSR)
+    m_exc_icb = exc_icb * VALOR_EXC_ICB
+    m_exc_comp = exc_comp * VALOR_EXC_COMP
+    base_core = p_icb + p_comp + p_psr + m_exc_icb + m_exc_comp
+
+    mod_si = buscar_escala(si_pct, MOD_SELL_IN, MOD_MINIMO)
+    mod_ca = buscar_escala(ca_q, MOD_ACTIVACIONES, MOD_MINIMO)
+    impacto_cp = round(base_core * (mod_si + mod_ca), 2)
+
+    v_fijas_q = portas + lineas + baf
+    if v_fijas_q >= UMBRAL_PREMIUM:
+        valores, mod_p_label = VALORES_PREMIUM, "Premio Premium (>=10 ventas)"
+    elif v_fijas_q >= MIN_VENTAS_FIJAS:
+        valores, mod_p_label = VALORES_BASE, "Rango Neutro (3-9 ventas)"
+    else:
+        valores, mod_p_label = VALORES_BASE, "Penalización -15% (<3 ventas)"
+
+    tot_portas = portas * valores["porta"]
+    tot_lineas = lineas * valores["linea"]
+    tot_baf = baf * valores["baf"]
+    fijas_total = tot_portas + tot_lineas + tot_baf
+
+    subtotal = base_core + impacto_cp + fijas_total
+    impacto_prod = round(subtotal * PENALIZACION, 2) if v_fijas_q < MIN_VENTAS_FIJAS else 0.0
+    bonos = BONO_LIDER * (bool(lider_icb) + bool(lider_comp))
+    total_final = max(0, round(subtotal + impacto_prod + bonos, 2))
+
+    return {
+        "icb_pct": icb_pct, "comp_pct": comp_pct,
+        "exc_icb": exc_icb, "exc_comp": exc_comp,
+        "p_icb": p_icb, "p_comp": p_comp, "p_psr": p_psr,
+        "m_exc_icb": m_exc_icb, "m_exc_comp": m_exc_comp, "base_core": base_core,
+        "mod_si": mod_si, "mod_ca": mod_ca, "impacto_cp": impacto_cp,
+        "v_fijas_q": v_fijas_q, "mod_p_label": mod_p_label,
+        "val_porta": valores["porta"], "val_linea": valores["linea"], "val_baf": valores["baf"],
+        "tot_portas": tot_portas, "tot_lineas": tot_lineas, "tot_baf": tot_baf,
+        "fijas_total": fijas_total, "impacto_prod": impacto_prod,
+        "bonos": bonos, "total_final": total_final,
+    }
+
+
+# --- ESTILOS ---
 st.markdown("""
     <style>
     .stButton>button { background-color: #ee122c; color: white; font-weight: bold;
@@ -45,6 +126,7 @@ def logo_base64(ruta):
         return base64.b64encode(f.read()).decode()
 
 
+# --- EXCEL ---
 def generar_excel(res):
     d, e = res["d"], res["entradas"]
     resumen = [
@@ -75,7 +157,7 @@ def generar_excel(res):
         pd.DataFrame(detalle).to_excel(writer, sheet_name="Detalle_Calculos", index=False)
         for ws in writer.book.worksheets:
             for col in ws.columns:
-                largo = max(len(str(c.value)) for c in col if c.value is not None)
+                largo = max((len(str(c.value)) for c in col if c.value is not None), default=0)
                 ws.column_dimensions[col[0].column_letter].width = max(largo + 4, 12)
             for fila in ws.iter_rows():
                 for c in fila:
@@ -84,6 +166,7 @@ def generar_excel(res):
     return output.getvalue()
 
 
+# --- RESULTADO EN PANTALLA ---
 def mostrar_resultado(res):
     d, e, vendedor = res["d"], res["entradas"], res["vendedor"]
     st.divider()
@@ -220,6 +303,5 @@ if st.button("🚀 GENERAR CÁLCULO"):
             "entradas": entradas, "d": calcular_comision(**entradas),
         }
 
-# El resultado queda en session_state: sobrevive al hacer clic en "Descargar"
 if "resultado" in st.session_state:
     mostrar_resultado(st.session_state["resultado"])
